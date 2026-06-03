@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import Sidebar from "@/components/Sidebar";
+import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { HostelProvider } from "@/context/HostelContext";
 import Providers from "./providers";
@@ -35,12 +36,15 @@ export default function RootLayout({
         <Providers>
           <HostelProvider>
             <TooltipProvider>
-              <div className="flex w-full min-h-screen">
+              <SidebarProvider>
                 <Sidebar />
                 <main className="flex-1 flex flex-col min-h-screen bg-stone-50 overflow-auto">
+                  <div className="h-12 flex items-center px-4 bg-white border-b border-stone-200 sticky top-0 z-40">
+                    <SidebarTrigger />
+                  </div>
                   {children}
                 </main>
-              </div>
+              </SidebarProvider>
             </TooltipProvider>
           </HostelProvider>
         </Providers>

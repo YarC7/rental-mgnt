@@ -71,6 +71,8 @@ export default function TenantsPage() {
       phone: formPhone,
       email: formEmail || "N/A",
       identityCard: formIdentity || "N/A",
+      dob: "",
+      gender: "",
       birthYear: formBirthYear,
       permanentAddress: formAddress || "N/A",
       roomNumber: formRoom,

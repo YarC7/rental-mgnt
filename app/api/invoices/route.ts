@@ -25,7 +25,6 @@ export async function POST(req: Request) {
 
     const roomId = roomRecord.length > 0 ? roomRecord[0].id : null;
     const newId = `i_${Date.now()}`;
-    const createdAt = new Date().toISOString().split("T")[0];
 
     const newInvoice = await db.insert(invoices).values({
       id: newId,
@@ -40,7 +39,7 @@ export async function POST(req: Request) {
       otherServicesCost: Number(otherServicesCost),
       total: Number(total),
       status: status || "unpaid",
-      createdAt,
+      createdAt: new Date(),
     }).returning();
 
     return NextResponse.json(newInvoice[0]);

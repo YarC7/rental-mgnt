@@ -22,7 +22,9 @@ export interface Tenant {
   name: string;
   phone: string;
   email: string;
-  identityCard: string;
+  identityCard: string;      // CCCD
+  dob: string;               // Ngày sinh
+  gender: string;            // Giới tính
   birthYear: string;         // Năm sinh
   permanentAddress: string;  // Địa chỉ thường trú
   roomNumber: string;

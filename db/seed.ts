@@ -49,7 +49,7 @@ async function main() {
       birthYear: "1998",
       permanentAddress: "Hoàn Kiếm, Hà Nội",
       roomId: "a1",
-      startDate: "2026-01-15",
+      startDate: new Date("2026-01-15"),
       deposit: 2500000,
     },
     {
@@ -62,7 +62,7 @@ async function main() {
       birthYear: "2000",
       permanentAddress: "Hải Châu, Đà Nẵng",
       roomId: "a3",
-      startDate: "2026-03-01",
+      startDate: new Date("2026-03-01"),
       deposit: 2800000,
     },
     {
@@ -75,7 +75,7 @@ async function main() {
       birthYear: "1997",
       permanentAddress: "Quận 3, TP Hồ Chí Minh",
       roomId: "b1",
-      startDate: "2026-02-10",
+      startDate: new Date("2026-02-10"),
       deposit: 3500000,
     },
   ]);
@@ -109,7 +109,7 @@ async function main() {
       otherServicesCost: 100000 + 50000,
       total: 2500000 + (45 * 3500) + (8 * 15000) + 150000,
       status: "paid",
-      createdAt: "2026-05-30",
+      createdAt: new Date("2026-05-30"),
     },
     {
       id: "i3",
@@ -124,7 +124,7 @@ async function main() {
       otherServicesCost: 120000 + 150000,
       total: 3500000 + (80 * 4000) + (15 * 18000) + 270000,
       status: "paid",
-      createdAt: "2026-05-30",
+      createdAt: new Date("2026-05-30"),
     },
   ]);
   console.log("Inserted invoices.");

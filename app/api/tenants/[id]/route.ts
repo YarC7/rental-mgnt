@@ -13,6 +13,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     if (body.phone !== undefined) updateData.phone = body.phone;
     if (body.email !== undefined) updateData.email = body.email;
     if (body.identityCard !== undefined) updateData.identityCard = body.identityCard;
+    if (body.dob !== undefined) updateData.dob = body.dob;
+    if (body.gender !== undefined) updateData.gender = body.gender;
     if (body.birthYear !== undefined) updateData.birthYear = body.birthYear;
     if (body.permanentAddress !== undefined) updateData.permanentAddress = body.permanentAddress;
     if (body.startDate !== undefined) updateData.startDate = body.startDate;
