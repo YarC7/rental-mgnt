@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import Sidebar from "@/components/Sidebar";
@@ -6,6 +6,7 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { HostelProvider } from "@/context/HostelContext";
 import Providers from "./providers";
+import PWARegister from "@/components/pwa-register";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -20,6 +21,18 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "ZenBoard - Quản lý Nhà trọ",
   description: "Hệ thống quản lý nhà trọ tối giản và hiệu quả",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "ZenBoard",
+  },
+  formatDetection: {
+    telephone: false,
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#1c1917",
 };
 
 export default function RootLayout({
@@ -34,6 +47,7 @@ export default function RootLayout({
     >
       <body className="min-h-full flex bg-stone-50 text-stone-900 font-sans">
         <Providers>
+          <PWARegister />
           <HostelProvider>
             <TooltipProvider>
               <SidebarProvider>

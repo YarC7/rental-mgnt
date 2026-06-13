@@ -4,7 +4,6 @@ dotenv.config({ path: ".env.local" });
 import { db } from "./index";
 import { hostels, rooms, tenants, services, invoices } from "./schema";
 
-
 async function main() {
   console.log("Seeding started...");
 
@@ -24,62 +23,108 @@ async function main() {
   ]);
   console.log("Inserted hostels.");
 
-  // 3. Insert Rooms
-  await db.insert(rooms).values([
-    { id: "a1", hostelId: "A", number: "101", price: 2500000, area: 25, status: "rented", description: "Phòng tầng 1, thoáng mát, vệ sinh khép kín" },
-    { id: "a2", hostelId: "A", number: "102", price: 2500000, area: 25, status: "empty", description: "Phòng tầng 1, có gác lửng, kệ bếp" },
-    { id: "a3", hostelId: "A", number: "201", price: 2800000, area: 28, status: "rented", description: "Phòng tầng 2, có ban công, tủ quần áo" },
-    { id: "a4", hostelId: "A", number: "202", price: 2800000, area: 28, status: "empty", description: "Đang trống sạch sẽ" },
-    { id: "a5", hostelId: "A", number: "301", price: 3000000, area: 30, status: "empty", description: "Phòng tầng 3, ban công rộng, có sẵn điều hòa" },
-    { id: "b1", hostelId: "B", number: "B101", price: 3500000, area: 35, status: "rented", description: "Căn hộ dịch vụ cao cấp, đầy đủ nội thất" },
-    { id: "b2", hostelId: "B", number: "B102", price: 3200000, area: 32, status: "empty", description: "Có máy giặt riêng, tủ lạnh, bếp điện âm" },
-    { id: "b3", hostelId: "B", number: "B201", price: 3800000, area: 38, status: "empty", description: "View ban công cực đẹp, hướng Đông Nam" },
-  ]);
-  console.log("Inserted rooms.");
+  // 3. Generate Rooms Data
+  const roomsData: (typeof rooms.$inferInsert)[] = [];
+  const tenantsData: (typeof tenants.$inferInsert)[] = [];
 
-  // 4. Insert Tenants
-  await db.insert(tenants).values([
-    {
-      id: "t1",
+  // --- Hostel A: 16 phòng (1 -> 16), mỗi phòng 2 người ---
+  for (let i = 1; i <= 16; i++) {
+    const roomNumber = i.toString(); // "1", "2", ..., "16"
+    const roomId = `a${i}`;
+    
+    roomsData.push({
+      id: roomId,
       hostelId: "A",
-      name: "Nguyễn Văn A",
-      phone: "0912345678",
-      email: "vana@gmail.com",
-      identityCard: "001099887766",
-      birthYear: "1998",
-      permanentAddress: "Hoàn Kiếm, Hà Nội",
-      roomId: "a1",
-      startDate: new Date("2026-01-15"),
-      deposit: 2500000,
-    },
-    {
-      id: "t2",
-      hostelId: "A",
-      name: "Trần Thị B",
-      phone: "0987654321",
-      email: "thib@gmail.com",
-      identityCard: "002099776655",
-      birthYear: "2000",
-      permanentAddress: "Hải Châu, Đà Nẵng",
-      roomId: "a3",
-      startDate: new Date("2026-03-01"),
-      deposit: 2800000,
-    },
-    {
-      id: "t3",
+      number: roomNumber,
+      price: 2500000,
+      area: 25,
+      status: "rented",
+      description: `Phòng số ${roomNumber} - Nhà trọ A, sạch sẽ thoáng mát, vệ sinh khép kín`,
+    });
+
+    // 2 người ở phòng này
+    tenantsData.push(
+      {
+        id: `t_a${i}_1`,
+        hostelId: "A",
+        name: `Nguyễn Văn Khách Phòng ${roomNumber}-A`,
+        phone: `0912345${i.toString().padStart(3, "0")}`,
+        email: `khach.phong${roomNumber}a@gmail.com`,
+        identityCard: `001099000${i.toString().padStart(3, "0")}`,
+        birthYear: "1999",
+        permanentAddress: "Hà Nội",
+        roomId: roomId,
+        startDate: new Date("2026-01-15"),
+        deposit: 2500000,
+      },
+      {
+        id: `t_a${i}_2`,
+        hostelId: "A",
+        name: `Trần Thị Khách Phòng ${roomNumber}-B`,
+        phone: `0987654${i.toString().padStart(3, "0")}`,
+        email: `khach.phong${roomNumber}b@gmail.com`,
+        identityCard: `002099000${i.toString().padStart(3, "0")}`,
+        birthYear: "2001",
+        permanentAddress: "Đà Nẵng",
+        roomId: roomId,
+        startDate: new Date("2026-01-15"),
+        deposit: 0,
+      }
+    );
+  }
+
+  // --- Hostel B: 7 phòng (1 -> 7), mỗi phòng 2 người ---
+  for (let i = 1; i <= 7; i++) {
+    const roomNumber = i.toString(); // "1", "2", ..., "7"
+    const roomId = `b${i}`;
+
+    roomsData.push({
+      id: roomId,
       hostelId: "B",
-      name: "Lê Văn C",
-      phone: "0966778899",
-      email: "vanc@gmail.com",
-      identityCard: "003099665544",
-      birthYear: "1997",
-      permanentAddress: "Quận 3, TP Hồ Chí Minh",
-      roomId: "b1",
-      startDate: new Date("2026-02-10"),
-      deposit: 3500000,
-    },
-  ]);
-  console.log("Inserted tenants.");
+      number: roomNumber,
+      price: 3500000,
+      area: 35,
+      status: "rented",
+      description: `Căn hộ dịch vụ cao cấp - Phòng số ${roomNumber} - Nhà trọ B`,
+    });
+
+    // 2 người ở phòng này
+    tenantsData.push(
+      {
+        id: `t_b${i}_1`,
+        hostelId: "B",
+        name: `Lê Văn Khách Phòng ${roomNumber}-B`, // Hậu tố -B để phân biệt với khách bên nhà A
+        phone: `0966778${i.toString().padStart(3, "0")}`,
+        email: `khach.b.phong${roomNumber}a@gmail.com`,
+        identityCard: `003099000${i.toString().padStart(3, "0")}`,
+        birthYear: "1997",
+        permanentAddress: "TP Hồ Chí Minh",
+        roomId: roomId,
+        startDate: new Date("2026-02-10"),
+        deposit: 3500000,
+      },
+      {
+        id: `t_b${i}_2`,
+        hostelId: "B",
+        name: `Phạm Minh Khách Phòng ${roomNumber}-B`,
+        phone: `0933445${i.toString().padStart(3, "0")}`,
+        email: `khach.b.phong${roomNumber}b@gmail.com`,
+        identityCard: `004099000${i.toString().padStart(3, "0")}`,
+        birthYear: "1998",
+        permanentAddress: "Cần Thơ",
+        roomId: roomId,
+        startDate: new Date("2026-02-10"),
+        deposit: 0,
+      }
+    );
+  }
+
+  // Thực thi insert vào DB
+  await db.insert(rooms).values(roomsData);
+  console.log(`Inserted ${roomsData.length} rooms.`);
+
+  await db.insert(tenants).values(tenantsData);
+  console.log(`Inserted ${tenantsData.length} tenants.`);
 
   // 5. Insert Services
   await db.insert(services).values([
@@ -94,14 +139,14 @@ async function main() {
   ]);
   console.log("Inserted services.");
 
-  // 6. Insert Invoices
+  // 6. Insert Invoices (Hóa đơn mẫu của phòng 1 khu A và phòng 1 khu B)
   await db.insert(invoices).values([
     {
       id: "i1",
       hostelId: "A",
       roomId: "a1",
-      roomNumber: "101",
-      tenantName: "Nguyễn Văn A",
+      roomNumber: "1",
+      tenantName: "Nguyễn Văn Khách Phòng 1-A",
       month: "2026-05",
       roomPrice: 2500000,
       electricityCost: 45 * 3500,
@@ -115,8 +160,8 @@ async function main() {
       id: "i3",
       hostelId: "B",
       roomId: "b1",
-      roomNumber: "B101",
-      tenantName: "Lê Văn C",
+      roomNumber: "1",
+      tenantName: "Lê Văn Khách Phòng 1-B",
       month: "2026-05",
       roomPrice: 3500000,
       electricityCost: 80 * 4000,

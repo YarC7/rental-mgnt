@@ -53,9 +53,7 @@ export default function Sidebar() {
     <SidebarBase collapsible="icon">
       <SidebarHeader>
         <div className="flex items-center gap-2.5 px-2 py-1">
-          <div className="w-8 h-8 rounded-lg bg-sidebar-primary flex items-center justify-center text-sidebar-primary-foreground flex-shrink-0">
-            <Building2 className="w-4 h-4" />
-          </div>
+          <Building2 className="w-4 h-4" />
           <div className="group-data-[collapsible=icon]:hidden">
             <h1 className="font-semibold text-sidebar-foreground leading-none text-sm tracking-wide">ZENBOARD</h1>
             <span className="text-[10px] text-sidebar-foreground/50 font-medium">Hệ thống quản lý</span>

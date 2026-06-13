@@ -277,7 +277,7 @@ export default function RoomsPage() {
   const isFetching = useIsFetching();
 
   return (
-    <div className="p-8 max-w-6xl space-y-6 font-sans text-stone-900">
+    <div className="p-8 w-full space-y-6 font-sans text-stone-900">
       {/* Global loading overlay */}
       {isFetching > 0 && (
         <div className="fixed top-3 right-3 z-50 flex items-center gap-2 bg-white/90 backdrop-blur-sm border border-stone-200 rounded-lg px-3 py-2 shadow-sm">
@@ -385,7 +385,7 @@ export default function RoomsPage() {
           </div>
         </div>
       ) : viewMode === "grid" ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-6">
           {filteredRooms.length > 0 ? (
             filteredRooms.map((room) => (
               <Card key={room.id} className="bg-white border-stone-200 hover:shadow-md transition-shadow relative overflow-hidden flex flex-col justify-between cursor-pointer" onClick={() => openDetailDialog(room)}>
