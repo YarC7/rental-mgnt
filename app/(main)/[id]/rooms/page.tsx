@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useIsFetching } from "@tanstack/react-query";
-import { Plus, Search, Home, MoreVertical, Edit2, Trash2, ShieldAlert, LayoutGrid, List, ArrowUpDown, ArrowUp, ArrowDown, User, Crown, Loader2 } from "lucide-react";
+import { Plus, Search, Home, MoreVertical, Edit2, Trash2, ShieldAlert, LayoutGrid, List, ArrowUpDown, ArrowUp, ArrowDown, User, Crown, Loader2, QrCode } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -33,9 +33,10 @@ import {
   createColumnHelper,
   type SortingState,
 } from "@tanstack/react-table";
+import { Html5Qrcode } from "html5-qrcode";
 
 export default function RoomsPage() {
-  const { rooms, tenants, addRoom, editRoom, deleteRoom, addTenant, currentHostel } = useHostel();
+  const { rooms, tenants, addRoom, editRoom, deleteRoom, addTenant, editTenant, currentHostel } = useHostel();
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
@@ -62,6 +63,11 @@ export default function RoomsPage() {
   const [tenantFormDob, setTenantFormDob] = useState("");
   const [tenantFormGender, setTenantFormGender] = useState("");
 
+  // QR Scanner State & Ref
+  const [isOpenQRScanner, setIsOpenQRScanner] = useState(false);
+  const [qrError, setQrError] = useState("");
+  const scannerRef = useRef<Html5Qrcode | null>(null);
+
   const resetForm = () => {
     setFormNumber("");
     setFormPrice("");
@@ -77,6 +83,91 @@ export default function RoomsPage() {
     setTenantFormDob("");
     setTenantFormGender("");
   };
+
+  const parseCCCDQR = (qrText: string) => {
+    const parts = qrText.split("|");
+    if (parts.length < 6) {
+      alert("Định dạng mã QR không khớp với CCCD Việt Nam!");
+      return null;
+    }
+
+    const cccd = parts[0].trim();
+    const name = parts[2].trim();
+    const rawDob = parts[3].trim(); // DDMMYYYY
+    const gender = parts[4].trim();
+    const address = parts[5].trim();
+
+    let dob = "";
+    let birthYear = "";
+    if (rawDob && rawDob.length === 8) {
+      const day = rawDob.substring(0, 2);
+      const month = rawDob.substring(2, 4);
+      const year = rawDob.substring(4, 8);
+      dob = `${year}-${month}-${day}`;
+      birthYear = year;
+    }
+
+    return {
+      cccd,
+      name,
+      dob,
+      birthYear,
+      gender: gender === "Nam" || gender === "Nữ" ? gender : "Khác",
+      address
+    };
+  };
+
+  const stopScanner = () => {
+    if (scannerRef.current && scannerRef.current.isScanning) {
+      scannerRef.current.stop().then(() => {
+        scannerRef.current = null;
+      }).catch((err) => {
+        console.error("Error stopping scanner:", err);
+      });
+    }
+  };
+
+  useEffect(() => {
+    if (isOpenQRScanner) {
+      setQrError("");
+      const timer = setTimeout(() => {
+        const html5Qrcode = new Html5Qrcode("reader");
+        scannerRef.current = html5Qrcode;
+
+        html5Qrcode.start(
+          { facingMode: "environment" },
+          {
+            fps: 10,
+            qrbox: { width: 220, height: 220 }
+          },
+          (decodedText) => {
+            const parsed = parseCCCDQR(decodedText);
+            if (parsed) {
+              setTenantFormName(parsed.name);
+              setTenantFormCccd(parsed.cccd);
+              setTenantFormDob(parsed.dob);
+              if (parsed.gender) {
+                setTenantFormGender(parsed.gender);
+              }
+              stopScanner();
+              setIsOpenQRScanner(false);
+            }
+          },
+          () => {
+            // Bỏ qua lỗi quét trên từng khung hình
+          }
+        ).catch((err) => {
+          console.error("Failed to start QR scanner:", err);
+          setQrError("Không thể mở camera. Vui lòng cấp quyền camera cho trang web.");
+        });
+      }, 300);
+
+      return () => {
+        clearTimeout(timer);
+        stopScanner();
+      };
+    }
+  }, [isOpenQRScanner]);
 
   const handleAddTenant = (e: React.FormEvent) => {
     e.preventDefault();
@@ -101,6 +192,32 @@ export default function RoomsPage() {
     }
     resetTenantForm();
     setIsOpenAddTenant(false);
+  };
+
+  const handleUnlinkTenant = (tenantId: string, tenantName: string, isPrimary: boolean) => {
+    if (confirm(`Bạn có chắc chắn muốn gỡ người thuê ${tenantName} khỏi phòng này?`)) {
+      // 1. Gỡ người thuê khỏi phòng bằng cách đặt roomId = null
+      editTenant(tenantId, { roomId: null as any });
+
+      // 2. Nếu người bị gỡ đang là chủ phòng, chọn người khác làm chủ phòng mới hoặc reset
+      if (isPrimary && detailRoom) {
+        const otherTenants = detailRoomTenants.filter(t => t.id !== tenantId);
+        const nextPrimaryName = otherTenants.length > 0 ? otherTenants[0].name : "";
+        const nextPrimaryDeposit = otherTenants.length > 0 ? otherTenants[0].deposit : 0;
+        
+        editRoom(detailRoom.id, { 
+          tenantName: nextPrimaryName, 
+          deposit: nextPrimaryDeposit 
+        });
+
+        // Cập nhật state cục bộ để giao diện phản ánh thay đổi ngay lập tức
+        setDetailRoom({
+          ...detailRoom,
+          tenantName: nextPrimaryName,
+          deposit: nextPrimaryDeposit
+        });
+      }
+    }
   };
 
   const handleAddRoom = (e: React.FormEvent) => {
@@ -576,35 +693,47 @@ export default function RoomsPage() {
                             <User className="w-4 h-4" />
                           </div>
                           <div>
-                            <div className="flex items-center gap-1.5">
-                              <p className="text-sm font-semibold text-stone-900">{tenant.name}</p>
+                            <div className="flex items-center gap-1.5 flex-wrap">
                               {isPrimary && (
-                                <span className="flex items-center gap-1 text-[10px] font-semibold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
+                                <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 shrink-0">
                                   <Crown className="w-3 h-3" /> Chủ phòng
                                 </span>
                               )}
+                              <p className="text-sm font-semibold text-stone-900">{tenant.name}</p>
                             </div>
                             <p className="text-[11px] text-stone-500">{tenant.phone}</p>
                           </div>
                         </div>
-                        <div className="text-right">
-                          {tenant.deposit > 0 && (
-                            <p className="text-xs text-stone-600">
-                              Cọc: <span className="font-semibold text-stone-900">{formatPrice(tenant.deposit)}</span>
-                            </p>
-                          )}
-                          {!isPrimary && detailRoom?.tenantName && (
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              className="text-[10px] h-6 px-2 text-stone-500 hover:text-amber-600 mt-1"
-                              onClick={() => {
-                                editRoom(detailRoom!.id, { tenantName: tenant.name, deposit: tenant.deposit });
-                              }}
-                            >
-                              <Crown className="w-3 h-3 mr-1" /> Đặt làm chủ phòng
-                            </Button>
-                          )}
+                        <div className="flex items-center gap-2">
+                          <div className="text-right">
+                            {tenant.deposit > 0 && (
+                              <p className="text-xs text-stone-600">
+                                Cọc: <span className="font-semibold text-stone-900">{formatPrice(tenant.deposit)}</span>
+                              </p>
+                            )}
+                            {!isPrimary && detailRoom?.tenantName && (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                className="text-[10px] h-6 px-2 text-stone-500 hover:text-amber-600 mt-1"
+                                onClick={() => {
+                                  editRoom(detailRoom!.id, { tenantName: tenant.name, deposit: tenant.deposit });
+                                }}
+                              >
+                                <Crown className="w-3 h-3 mr-1" /> Đặt làm chủ phòng
+                              </Button>
+                            )}
+                          </div>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-stone-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg"
+                            title="Gỡ khỏi phòng"
+                            onClick={() => handleUnlinkTenant(tenant.id, tenant.name, isPrimary)}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
                         </div>
                       </div>
                     );
@@ -636,6 +765,15 @@ export default function RoomsPage() {
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleAddTenant} className="space-y-4 py-2">
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full text-xs gap-1.5 py-2 px-3 border-stone-300 text-stone-700 hover:bg-stone-50"
+              onClick={() => setIsOpenQRScanner(true)}
+            >
+              <QrCode className="w-4 h-4" /> Quét mã QR từ thẻ CCCD
+            </Button>
+
             <div className="space-y-1.5">
               <Label htmlFor="tenant-name" className="text-stone-700 text-xs font-medium">Họ tên <span className="text-rose-500">*</span></Label>
               <Input id="tenant-name" placeholder="Nguyễn Văn A" value={tenantFormName} onChange={(e) => setTenantFormName(e.target.value)} required />
@@ -714,6 +852,32 @@ export default function RoomsPage() {
               <Button type="submit" className="bg-stone-900 text-white text-xs hover:bg-stone-800">Cập nhật</Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* QR Scanner Dialog */}
+      <Dialog open={isOpenQRScanner} onOpenChange={(open) => {
+        setIsOpenQRScanner(open);
+        if (!open) {
+          stopScanner();
+        }
+      }}>
+        <DialogContent className="max-w-sm bg-white">
+          <DialogHeader>
+            <DialogTitle className="text-stone-900 text-base font-semibold">Quét mã QR CCCD</DialogTitle>
+            <DialogDescription className="text-stone-500 text-xs">
+              Đặt mã QR trên thẻ CCCD vào khung hình để quét tự động.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col items-center justify-center p-4">
+            <div id="reader" className="w-full aspect-square max-w-[280px] bg-stone-100 rounded-lg overflow-hidden border border-stone-200 relative">
+              <div className="absolute inset-0 border-2 border-emerald-500 rounded-lg animate-pulse pointer-events-none" />
+            </div>
+            {qrError && <p className="text-xs text-rose-500 mt-2 text-center">{qrError}</p>}
+          </div>
+          <DialogFooter className="pt-2">
+            <Button type="button" variant="ghost" className="text-xs" onClick={() => setIsOpenQRScanner(false)}>Đóng</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
