@@ -27,6 +27,7 @@ export interface Tenant {
   gender: string;            // Giới tính
   birthYear: string;         // Năm sinh
   permanentAddress: string;  // Địa chỉ thường trú
+  identityCardIssueDate?: string;
   roomNumber: string;
   roomId?: string;           // ID của phòng trọ từ Database
   startDate: string;         // Ngày bắt đầu ở

@@ -15,7 +15,7 @@ export async function GET() {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { hostelId, name, phone, email, identityCard, dob, gender, birthYear, permanentAddress, roomNumber, startDate, deposit } = body;
+    const { hostelId, name, phone, email, identityCard, dob, gender, birthYear, permanentAddress, identityCardIssueDate, roomNumber, startDate, deposit } = body;
 
     // Find the room by number and hostelId
     const roomRecord = await db
@@ -44,6 +44,7 @@ export async function POST(req: Request) {
         gender: gender || "",
         birthYear,
         permanentAddress,
+        identityCardIssueDate: identityCardIssueDate || "",
         roomId,
         startDate: new Date(startDate),
         deposit: Number(deposit),

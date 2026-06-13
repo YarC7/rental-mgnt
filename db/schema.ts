@@ -56,6 +56,7 @@ export const tenants = pgTable("tenants", {
   gender: text("gender").notNull().default(""), // Giới tính
   birthYear: text("birth_year").notNull(),
   permanentAddress: text("permanent_address").notNull(),
+  identityCardIssueDate: text("identity_card_issue_date"),
   roomId: text("room_id").references(() => rooms.id, { onDelete: "set null" }),
   startDate: timestamp("start_date").notNull(),
   deposit: integer("deposit").notNull().default(0),

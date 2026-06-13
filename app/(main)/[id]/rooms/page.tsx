@@ -62,6 +62,9 @@ export default function RoomsPage() {
   const [tenantFormCccd, setTenantFormCccd] = useState("");
   const [tenantFormDob, setTenantFormDob] = useState("");
   const [tenantFormGender, setTenantFormGender] = useState("");
+  const [tenantFormAddress, setTenantFormAddress] = useState("");
+  const [tenantFormCccdDate, setTenantFormCccdDate] = useState("");
+  const [tenantFormDeposit, setTenantFormDeposit] = useState("");
 
   // QR Scanner State & Ref
   const [isOpenQRScanner, setIsOpenQRScanner] = useState(false);
@@ -82,6 +85,9 @@ export default function RoomsPage() {
     setTenantFormCccd("");
     setTenantFormDob("");
     setTenantFormGender("");
+    setTenantFormAddress("");
+    setTenantFormCccdDate("");
+    setTenantFormDeposit("");
   };
 
   const parseCCCDQR = (qrText: string) => {
@@ -96,6 +102,7 @@ export default function RoomsPage() {
     const rawDob = parts[3].trim(); // DDMMYYYY
     const gender = parts[4].trim();
     const address = parts[5].trim();
+    const rawIssueDate = parts[6] ? parts[6].trim() : ""; // DDMMYYYY (nếu có)
 
     let dob = "";
     let birthYear = "";
@@ -107,13 +114,22 @@ export default function RoomsPage() {
       birthYear = year;
     }
 
+    let issueDate = "";
+    if (rawIssueDate && rawIssueDate.length === 8) {
+      const day = rawIssueDate.substring(0, 2);
+      const month = rawIssueDate.substring(2, 4);
+      const year = rawIssueDate.substring(4, 8);
+      issueDate = `${year}-${month}-${day}`;
+    }
+
     return {
       cccd,
       name,
       dob,
       birthYear,
       gender: gender === "Nam" || gender === "Nữ" ? gender : "Khác",
-      address
+      address,
+      issueDate
     };
   };
 
@@ -146,6 +162,10 @@ export default function RoomsPage() {
               setTenantFormName(parsed.name);
               setTenantFormCccd(parsed.cccd);
               setTenantFormDob(parsed.dob);
+              setTenantFormAddress(parsed.address);
+              if (parsed.issueDate) {
+                setTenantFormCccdDate(parsed.issueDate);
+              }
               if (parsed.gender) {
                 setTenantFormGender(parsed.gender);
               }
@@ -172,6 +192,7 @@ export default function RoomsPage() {
   const handleAddTenant = (e: React.FormEvent) => {
     e.preventDefault();
     if (!tenantFormName || !detailRoom) return;
+    const depositVal = Number(tenantFormDeposit) || 0;
     addTenant({
       name: tenantFormName,
       phone: tenantFormPhone,
@@ -180,15 +201,16 @@ export default function RoomsPage() {
       dob: tenantFormDob,
       gender: tenantFormGender,
       birthYear: tenantFormDob ? tenantFormDob.split("-")[0] : "",
-      permanentAddress: "",
+      permanentAddress: tenantFormAddress || "",
+      identityCardIssueDate: tenantFormCccdDate || "",
       roomNumber: detailRoom.number,
       roomId: detailRoom.id,
       startDate: new Date().toISOString().split("T")[0],
-      deposit: 0,
+      deposit: depositVal,
     });
     // If no primary tenant yet, set this tenant as primary
     if (!detailRoom.tenantName) {
-      editRoom(detailRoom.id, { tenantName: tenantFormName, deposit: 0 });
+      editRoom(detailRoom.id, { tenantName: tenantFormName, deposit: depositVal });
     }
     resetTenantForm();
     setIsOpenAddTenant(false);
@@ -801,6 +823,22 @@ export default function RoomsPage() {
                   <option value="Nữ">Nữ</option>
                   <option value="Khác">Khác</option>
                 </NativeSelect>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="tenant-address" className="text-stone-700 text-xs font-medium">Địa chỉ thường trú</Label>
+              <Input id="tenant-address" placeholder="Tỉnh/Thành phố..." value={tenantFormAddress} onChange={(e) => setTenantFormAddress(e.target.value)} />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="tenant-cccd-date" className="text-stone-700 text-xs font-medium">Ngày cấp CCCD</Label>
+                <Input id="tenant-cccd-date" type="date" value={tenantFormCccdDate} onChange={(e) => setTenantFormCccdDate(e.target.value)} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="tenant-deposit-input" className="text-stone-700 text-xs font-medium">Tiền đặt cọc (VND) <span className="text-rose-500">*</span></Label>
+                <Input id="tenant-deposit-input" type="number" placeholder="2500000" value={tenantFormDeposit} onChange={(e) => setTenantFormDeposit(e.target.value)} required />
               </div>
             </div>
             <DialogFooter className="pt-2">
