@@ -571,7 +571,7 @@ export default function RoomsPage() {
                           <p className="text-xs font-semibold text-stone-800 truncate" title={room.tenantName}>{room.tenantName}</p>
                         </div>
                         {room.deposit !== undefined && (
-                          <div>
+                          <div className="text-right">
                             <p className="text-[10px] text-stone-400 font-medium">TIỀN ĐẶT CỌC</p>
                             <p className="text-xs font-bold text-stone-900">{formatPrice(room.deposit)}</p>
                           </div>
