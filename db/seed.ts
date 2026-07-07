@@ -164,113 +164,136 @@ async function main() {
   ]);
   console.log("Inserted services.");
 
-  // 6. Insert Invoices (Hóa đơn mẫu đồng bộ với lịch sử điện nước và đơn giá mới)
-  await db.insert(invoices).values([
-    // Hostel A - Room a1
-    {
-      id: "i_a1_04",
-      hostelId: "A",
-      roomId: "a1",
-      roomNumber: "1",
-      tenantName: "Nguyễn Văn Khách Phòng 1-A",
-      month: "2026-04",
-      roomPrice: 2500000,
-      electricityCost: 120 * 3000, // 100 -> 220 = 120 kWh
-      waterCost: 8 * 5000,         // 10 -> 18 = 8 m3
-      otherServicesCost: 20000 + 30000,
-      total: 2500000 + (120 * 3000) + (8 * 5000) + 50000,
-      status: "paid",
-      createdAt: new Date("2026-04-30"),
-    },
-    {
-      id: "i_a1_05",
-      hostelId: "A",
-      roomId: "a1",
-      roomNumber: "1",
-      tenantName: "Nguyễn Văn Khách Phòng 1-A",
-      month: "2026-05",
-      roomPrice: 2500000,
-      electricityCost: 130 * 3000, // 220 -> 350 = 130 kWh
-      waterCost: 9 * 5000,         // 18 -> 27 = 9 m3
-      otherServicesCost: 20000 + 30000,
-      total: 2500000 + (130 * 3000) + (9 * 5000) + 50000,
-      status: "paid",
-      createdAt: new Date("2026-05-30"),
-    },
-    {
-      id: "i_a1_06",
-      hostelId: "A",
-      roomId: "a1",
-      roomNumber: "1",
-      tenantName: "Nguyễn Văn Khách Phòng 1-A",
-      month: "2026-06",
-      roomPrice: 2500000,
-      electricityCost: 140 * 3000, // 350 -> 490 = 140 kWh
-      waterCost: 10 * 5000,        // 27 -> 37 = 10 m3
-      otherServicesCost: 20000 + 30000,
-      total: 2500000 + (140 * 3000) + (10 * 5000) + 50000,
-      status: "unpaid",
-      createdAt: new Date("2026-06-30"),
-    },
-    // Hostel B - Room b1
-    {
-      id: "i_b1_04",
-      hostelId: "B",
-      roomId: "b1",
-      roomNumber: "1",
-      tenantName: "Lê Văn Khách Phòng 1-B",
-      month: "2026-04",
-      roomPrice: 3500000,
-      electricityCost: 150 * 3000, // 200 -> 350 = 150 kWh
-      waterCost: 13 * 5000,        // 15 -> 28 = 13 m3
-      otherServicesCost: 20000 + 30000,
-      total: 3500000 + (150 * 3000) + (13 * 5000) + 50000,
-      status: "paid",
-      createdAt: new Date("2026-04-30"),
-    },
-    {
-      id: "i_b1_05",
-      hostelId: "B",
-      roomId: "b1",
-      roomNumber: "1",
-      tenantName: "Lê Văn Khách Phòng 1-B",
-      month: "2026-05",
-      roomPrice: 3500000,
-      electricityCost: 160 * 3000, // 350 -> 510 = 160 kWh
-      waterCost: 17 * 5000,        // 28 -> 45 = 17 m3
-      otherServicesCost: 20000 + 30000,
-      total: 3500000 + (160 * 3000) + (17 * 5000) + 50000,
-      status: "paid",
-      createdAt: new Date("2026-05-30"),
-    },
-    {
-      id: "i_b1_06",
-      hostelId: "B",
-      roomId: "b1",
-      roomNumber: "1",
-      tenantName: "Lê Văn Khách Phòng 1-B",
-      month: "2026-06",
-      roomPrice: 3500000,
-      electricityCost: 170 * 3000, // 510 -> 680 = 170 kWh
-      waterCost: 20 * 5000,        // 45 -> 65 = 20 m3
-      otherServicesCost: 20000 + 30000,
-      total: 3500000 + (170 * 3000) + (20 * 5000) + 50000,
-      status: "unpaid",
-      createdAt: new Date("2026-06-30"),
-    },
-  ]);
-  console.log("Inserted invoices.");
+  // 6. Generate Invoices and Room Usages programmatically for all rooms over the last 3 months
+  const invoicesData: (typeof invoices.$inferInsert)[] = [];
+  const roomUsagesData: (typeof roomUsages.$inferInsert)[] = [];
 
-  // 7. Insert Room Usages (lịch sử điện nước mẫu)
-  await db.insert(roomUsages).values([
-    { id: "ru1", roomId: "a1", month: "2026-04", electricityStart: 100, electricityEnd: 220, waterStart: 10, waterEnd: 18 },
-    { id: "ru2", roomId: "a1", month: "2026-05", electricityStart: 220, electricityEnd: 350, waterStart: 18, waterEnd: 27 },
-    { id: "ru3", roomId: "a1", month: "2026-06", electricityStart: 350, electricityEnd: 490, waterStart: 27, waterEnd: 37 },
-    { id: "ru4", roomId: "b1", month: "2026-04", electricityStart: 200, electricityEnd: 350, waterStart: 15, waterEnd: 28 },
-    { id: "ru5", roomId: "b1", month: "2026-05", electricityStart: 350, electricityEnd: 510, waterStart: 28, waterEnd: 45 },
-    { id: "ru6", roomId: "b1", month: "2026-06", electricityStart: 510, electricityEnd: 680, waterStart: 45, waterEnd: 65 },
-  ]);
-  console.log("Inserted room usages.");
+  const months = ["2026-04", "2026-05", "2026-06"];
+
+  // Hostel A
+  for (let i = 1; i <= 16; i++) {
+    const roomId = `a${i}`;
+    const roomNumber = i.toString();
+
+    // Base readings
+    let prevElec = 100 + i * 10;
+    let prevWater = 10 + i * 2;
+
+    for (let m = 0; m < months.length; m++) {
+      const month = months[m];
+      const elecUsed = 80 + (i % 3) * 15 + m * 10;
+      const waterUsed = 6 + (i % 2) * 2 + m * 2;
+
+      const currentElec = prevElec + elecUsed;
+      const currentWater = prevWater + waterUsed;
+
+      const usageId = `ru_a_${i}_${m}`;
+      roomUsagesData.push({
+        id: usageId,
+        roomId,
+        month,
+        electricityStart: prevElec,
+        electricityEnd: currentElec,
+        waterStart: prevWater,
+        waterEnd: currentWater,
+        createdAt: new Date(`${month}-28`),
+      });
+
+      // Invoice
+      const electricityCost = elecUsed * 3000;
+      const waterCost = waterUsed * 5000;
+      const otherServicesCost = 20000 + 30000; // Internet 20k + Trash 30k
+      const total = 2500000 + electricityCost + waterCost + otherServicesCost;
+
+      // Status: June invoice is unpaid, April and May are paid
+      const status = month === "2026-06" ? "unpaid" : "paid";
+
+      invoicesData.push({
+        id: `i_a_${i}_${m}`,
+        hostelId: "A",
+        roomId,
+        roomNumber,
+        tenantName: `Nguyễn Văn Khách Phòng ${roomNumber}-A`,
+        month,
+        roomPrice: 2500000,
+        electricityCost,
+        waterCost,
+        otherServicesCost,
+        total,
+        status,
+        createdAt: new Date(`${month}-30`),
+      });
+
+      prevElec = currentElec;
+      prevWater = currentWater;
+    }
+  }
+
+  // Hostel B
+  for (let i = 1; i <= 7; i++) {
+    const roomId = `b${i}`;
+    const roomNumber = i.toString();
+
+    // Base readings
+    let prevElec = 200 + i * 15;
+    let prevWater = 15 + i * 3;
+
+    for (let m = 0; m < months.length; m++) {
+      const month = months[m];
+      const elecUsed = 120 + (i % 3) * 20 + m * 15;
+      const waterUsed = 10 + (i % 2) * 3 + m * 2;
+
+      const currentElec = prevElec + elecUsed;
+      const currentWater = prevWater + waterUsed;
+
+      const usageId = `ru_b_${i}_${m}`;
+      roomUsagesData.push({
+        id: usageId,
+        roomId,
+        month,
+        electricityStart: prevElec,
+        electricityEnd: currentElec,
+        waterStart: prevWater,
+        waterEnd: currentWater,
+        createdAt: new Date(`${month}-28`),
+      });
+
+      // Invoice
+      const electricityCost = elecUsed * 3000;
+      const waterCost = waterUsed * 5000;
+      const otherServicesCost = 20000 + 30000; // Internet 20k + Trash 30k
+      const total = 3500000 + electricityCost + waterCost + otherServicesCost;
+
+      // Status: June invoice is unpaid, April and May are paid
+      const status = month === "2026-06" ? "unpaid" : "paid";
+
+      invoicesData.push({
+        id: `i_b_${i}_${m}`,
+        hostelId: "B",
+        roomId,
+        roomNumber,
+        tenantName: `Lê Văn Khách Phòng ${roomNumber}-B`,
+        month,
+        roomPrice: 3500000,
+        electricityCost,
+        waterCost,
+        otherServicesCost,
+        total,
+        status,
+        createdAt: new Date(`${month}-30`),
+      });
+
+      prevElec = currentElec;
+      prevWater = currentWater;
+    }
+  }
+
+  // Perform inserts
+  await db.insert(invoices).values(invoicesData);
+  console.log(`Inserted ${invoicesData.length} invoices.`);
+
+  await db.insert(roomUsages).values(roomUsagesData);
+  console.log(`Inserted ${roomUsagesData.length} room usages.`);
 
   console.log("Seeding finished successfully!");
   process.exit(0);
