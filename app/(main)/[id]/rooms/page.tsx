@@ -16,6 +16,14 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { Label } from "@/components/ui/label";
 import {
   DropdownMenu,
@@ -41,6 +49,10 @@ export default function RoomsPage() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [sorting, setSorting] = useState<SortingState>([]);
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Form State
   const [isOpenAdd, setIsOpenAdd] = useState(false);
@@ -418,7 +430,7 @@ export default function RoomsPage() {
   return (
     <div className="p-8 w-full space-y-6 font-sans text-stone-900">
       {/* Global loading overlay */}
-      {isFetching > 0 && (
+      {mounted && isFetching > 0 && (
         <div className="fixed top-3 right-3 z-50 flex items-center gap-2 bg-white/90 backdrop-blur-sm border border-stone-200 rounded-lg px-3 py-2 shadow-sm">
           <Loader2 className="size-4 text-stone-500 animate-spin" />
           <span className="text-[11px] text-stone-500 font-medium">Đang đồng bộ...</span>
@@ -481,7 +493,7 @@ export default function RoomsPage() {
       </div>
 
       {/* Filter & Search */}
-      <div className="flex flex-col sm:flex-row gap-4 bg-white p-4 rounded-xl border border-stone-200 shadow-sm">
+      <div className="flex flex-col sm:flex-row gap-4">
         <div className="relative flex-1">
           <Search className="absolute left-3.5 top-2.5 h-4 w-4 text-stone-400" />
           <Input
@@ -641,141 +653,143 @@ export default function RoomsPage() {
         </div>
       )}
 
-      {/* Room Detail Dialog */}
-      <Dialog open={isOpenDetail} onOpenChange={(open) => { setIsOpenDetail(open); if (!open) { setDetailRoom(null); resetForm(); } }}>
-        <DialogContent className="max-w-xl bg-white max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="text-stone-900 text-base font-semibold flex items-center gap-2">
+      {/* Room Detail Drawer/Sidebar */}
+      <Sheet open={isOpenDetail} onOpenChange={(open) => { setIsOpenDetail(open); if (!open) { setDetailRoom(null); resetForm(); } }}>
+        <SheetContent className="data-[side=right]:sm:max-w-2xl w-full bg-white overflow-y-auto h-full flex flex-col p-6">
+          <SheetHeader className="p-0 mb-4">
+            <SheetTitle className="text-stone-900 text-base font-semibold flex items-center gap-2">
               Phòng {detailRoom?.number}
               {detailRoom && getStatusBadge(detailRoom.status)}
-            </DialogTitle>
-            <DialogDescription className="text-stone-500 text-xs">
+            </SheetTitle>
+            <SheetDescription className="text-stone-500 text-xs">
               Thông tin chi tiết phòng trọ.
-            </DialogDescription>
-          </DialogHeader>
+            </SheetDescription>
+          </SheetHeader>
 
-          <form onSubmit={handleDetailSave} className="space-y-5 py-2">
-            {/* Room Info Section */}
-            <div>
-              <h4 className="text-xs font-semibold text-stone-700 mb-3 uppercase tracking-wide">Thông tin phòng</h4>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <Label htmlFor="detail-number" className="text-stone-700 text-xs font-medium">Số phòng</Label>
-                  <Input id="detail-number" placeholder="Ví dụ: 104" value={formNumber} onChange={(e) => setFormNumber(e.target.value)} required />
+          <form onSubmit={handleDetailSave} className="space-y-5 flex-1 flex flex-col justify-between">
+            <div className="space-y-5 overflow-y-auto pr-1">
+              {/* Room Info Section */}
+              <div>
+                <h4 className="text-xs font-semibold text-stone-700 mb-3 uppercase tracking-wide">Thông tin phòng</h4>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="detail-number" className="text-stone-700 text-xs font-medium">Số phòng</Label>
+                    <Input id="detail-number" placeholder="Ví dụ: 104" value={formNumber} onChange={(e) => setFormNumber(e.target.value)} required />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="detail-status" className="text-stone-700 text-xs font-medium">Trạng thái</Label>
+                    <NativeSelect id="detail-status" value={formStatus} onChange={(e) => setFormStatus(e.target.value as any)}>
+                      <option value="empty">Đang trống</option>
+                      <option value="rented">Đã thuê</option>
+                      <option value="maintenance">Bảo trì</option>
+                    </NativeSelect>
+                  </div>
                 </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="detail-status" className="text-stone-700 text-xs font-medium">Trạng thái</Label>
-                  <NativeSelect id="detail-status" value={formStatus} onChange={(e) => setFormStatus(e.target.value as any)}>
-                    <option value="empty">Đang trống</option>
-                    <option value="rented">Đã thuê</option>
-                    <option value="maintenance">Bảo trì</option>
-                  </NativeSelect>
+                <div className="grid grid-cols-2 gap-4 mt-4">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="detail-price" className="text-stone-700 text-xs font-medium">Giá thuê (VND/tháng)</Label>
+                    <Input id="detail-price" type="number" placeholder="2500000" value={formPrice} onChange={(e) => setFormPrice(e.target.value)} required />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="detail-area" className="text-stone-700 text-xs font-medium">Diện tích (m²)</Label>
+                    <Input id="detail-area" type="number" placeholder="25" value={formArea} onChange={(e) => setFormArea(e.target.value)} required />
+                  </div>
+                </div>
+                <div className="space-y-1.5 mt-4">
+                  <Label htmlFor="detail-desc" className="text-stone-700 text-xs font-medium">Mô tả phòng</Label>
+                  <Input id="detail-desc" placeholder="Gác lửng, tủ đồ, máy lạnh..." value={formDesc} onChange={(e) => setFormDesc(e.target.value)} />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4 mt-4">
-                <div className="space-y-1.5">
-                  <Label htmlFor="detail-price" className="text-stone-700 text-xs font-medium">Giá thuê (VND/tháng)</Label>
-                  <Input id="detail-price" type="number" placeholder="2500000" value={formPrice} onChange={(e) => setFormPrice(e.target.value)} required />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="detail-area" className="text-stone-700 text-xs font-medium">Diện tích (m²)</Label>
-                  <Input id="detail-area" type="number" placeholder="25" value={formArea} onChange={(e) => setFormArea(e.target.value)} required />
-                </div>
-              </div>
-              <div className="space-y-1.5 mt-4">
-                <Label htmlFor="detail-desc" className="text-stone-700 text-xs font-medium">Mô tả phòng</Label>
-                <Input id="detail-desc" placeholder="Gác lửng, tủ đồ, máy lạnh..." value={formDesc} onChange={(e) => setFormDesc(e.target.value)} />
-              </div>
-            </div>
 
-            {/* Tenants Section */}
-            <div>
-              <div className="flex items-center justify-between mb-3">
-                <h4 className="text-xs font-semibold text-stone-700 uppercase tracking-wide">
-                  Người thuê ({detailRoomTenants.length})
-                </h4>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="text-[11px] h-7 px-2.5 border-stone-300 text-stone-700"
-                  onClick={() => setIsOpenAddTenant(true)}
-                >
-                  <Plus className="w-3 h-3 mr-1" /> Thêm người thuê
-                </Button>
-              </div>
-              {detailRoomTenants.length > 0 ? (
-                <div className="space-y-2">
-                  {detailRoomTenants.map((tenant) => {
-                    const isPrimary = tenant.name === detailRoom?.tenantName;
-                    return (
-                      <div key={tenant.id} className="flex items-center justify-between p-3 rounded-lg border border-stone-200 bg-stone-50/50">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-stone-200 flex items-center justify-center text-stone-600">
-                            <User className="w-4 h-4" />
-                          </div>
-                          <div>
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              {isPrimary && (
-                                <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 shrink-0">
-                                  <Crown className="w-3 h-3" /> Chủ phòng
-                                </span>
-                              )}
-                              <p className="text-sm font-semibold text-stone-900">{tenant.name}</p>
+              {/* Tenants Section */}
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="text-xs font-semibold text-stone-700 uppercase tracking-wide">
+                    Người thuê ({detailRoomTenants.length})
+                  </h4>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="text-[11px] h-7 px-2.5 border-stone-300 text-stone-700"
+                    onClick={() => setIsOpenAddTenant(true)}
+                  >
+                    <Plus className="w-3 h-3 mr-1" /> Thêm người thuê
+                  </Button>
+                </div>
+                {detailRoomTenants.length > 0 ? (
+                  <div className="space-y-2">
+                    {detailRoomTenants.map((tenant) => {
+                      const isPrimary = tenant.name === detailRoom?.tenantName;
+                      return (
+                        <div key={tenant.id} className="flex items-center justify-between p-3 rounded-lg border border-stone-200 bg-stone-50/50">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-full bg-stone-200 flex items-center justify-center text-stone-600">
+                              <User className="w-4 h-4" />
                             </div>
-                            <p className="text-[11px] text-stone-500">{tenant.phone}</p>
+                            <div>
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                {isPrimary && (
+                                  <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 shrink-0">
+                                    <Crown className="w-3 h-3" /> Chủ phòng
+                                  </span>
+                                )}
+                                <p className="text-sm font-semibold text-stone-900">{tenant.name}</p>
+                              </div>
+                              <p className="text-[11px] text-stone-500">{tenant.phone}</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <div className="text-right">
+                              {tenant.deposit > 0 && (
+                                <p className="text-xs text-stone-600">
+                                  Cọc: <span className="font-semibold text-stone-900">{formatPrice(tenant.deposit)}</span>
+                                </p>
+                              )}
+                              {!isPrimary && detailRoom?.tenantName && (
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  className="text-[10px] h-6 px-2 text-stone-500 hover:text-amber-600 mt-1"
+                                  onClick={() => {
+                                    editRoom(detailRoom!.id, { tenantName: tenant.name, deposit: tenant.deposit });
+                                  }}
+                                >
+                                  <Crown className="w-3 h-3 mr-1" /> Đặt làm chủ phòng
+                                </Button>
+                              )}
+                            </div>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-stone-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg"
+                              title="Gỡ khỏi phòng"
+                              onClick={() => handleUnlinkTenant(tenant.id, tenant.name, isPrimary)}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
                           </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <div className="text-right">
-                            {tenant.deposit > 0 && (
-                              <p className="text-xs text-stone-600">
-                                Cọc: <span className="font-semibold text-stone-900">{formatPrice(tenant.deposit)}</span>
-                              </p>
-                            )}
-                            {!isPrimary && detailRoom?.tenantName && (
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                className="text-[10px] h-6 px-2 text-stone-500 hover:text-amber-600 mt-1"
-                                onClick={() => {
-                                  editRoom(detailRoom!.id, { tenantName: tenant.name, deposit: tenant.deposit });
-                                }}
-                              >
-                                <Crown className="w-3 h-3 mr-1" /> Đặt làm chủ phòng
-                              </Button>
-                            )}
-                          </div>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-stone-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg"
-                            title="Gỡ khỏi phòng"
-                            onClick={() => handleUnlinkTenant(tenant.id, tenant.name, isPrimary)}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div className="text-center py-6 text-stone-400 text-xs">
-                  <User className="w-6 h-6 mx-auto mb-1" />
-                  Chưa có người thuê
-                </div>
-              )}
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="text-center py-6 text-stone-400 text-xs">
+                    <User className="w-6 h-6 mx-auto mb-1" />
+                    Chưa có người thuê
+                  </div>
+                )}
+              </div>
             </div>
 
-            <DialogFooter className="pt-2 border-t border-stone-100">
+            <SheetFooter className="pt-4 border-t border-stone-100 p-0 flex flex-row justify-end gap-2 shrink-0">
               <Button type="button" variant="ghost" className="text-xs" onClick={() => { setIsOpenDetail(false); setDetailRoom(null); resetForm(); }}>Đóng</Button>
               <Button type="submit" className="bg-stone-900 text-white text-xs hover:bg-stone-800">Lưu thay đổi</Button>
-            </DialogFooter>
+            </SheetFooter>
           </form>
-        </DialogContent>
-      </Dialog>
+        </SheetContent>
+      </Sheet>
 
       {/* Add Tenant Dialog */}
       <Dialog open={isOpenAddTenant} onOpenChange={(open) => { setIsOpenAddTenant(open); if (!open) resetTenantForm(); }}>

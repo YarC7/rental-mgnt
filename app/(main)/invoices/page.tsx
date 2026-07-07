@@ -257,7 +257,7 @@ export default function InvoicesPage() {
 
 
       {/* Filter and search */}
-      <div className="flex flex-col sm:flex-row gap-4 bg-white p-4 rounded-xl border border-stone-200 shadow-sm">
+      <div className="flex flex-col sm:flex-row gap-4">
         <div className="relative flex-1">
           <Search className="absolute left-3.5 top-2.5 h-4 w-4 text-stone-400" />
           <Input
