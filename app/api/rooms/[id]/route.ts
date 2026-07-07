@@ -15,6 +15,14 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     if (body.status !== undefined) updateData.status = body.status;
     if (body.description !== undefined) updateData.description = body.description;
 
+    if (Object.keys(updateData).length === 0) {
+      const currentRoom = await db.select().from(rooms).where(eq(rooms.id, id)).limit(1);
+      if (currentRoom.length === 0) {
+        return NextResponse.json({ error: "Room not found" }, { status: 404 });
+      }
+      return NextResponse.json(currentRoom[0]);
+    }
+
     const updatedRoom = await db
       .update(rooms)
       .set(updateData)

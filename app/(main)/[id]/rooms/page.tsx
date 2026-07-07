@@ -219,37 +219,23 @@ export default function RoomsPage() {
       roomId: detailRoom.id,
       startDate: new Date().toISOString().split("T")[0],
       deposit: depositVal,
+      isPrimary: !detailRoom.tenantName,
     });
-    // If no primary tenant yet, set this tenant as primary
-    if (!detailRoom.tenantName) {
-      editRoom(detailRoom.id, { tenantName: tenantFormName, deposit: depositVal });
-    }
     resetTenantForm();
     setIsOpenAddTenant(false);
   };
 
   const handleUnlinkTenant = (tenantId: string, tenantName: string, isPrimary: boolean) => {
     if (confirm(`Bạn có chắc chắn muốn gỡ người thuê ${tenantName} khỏi phòng này?`)) {
-      // 1. Gỡ người thuê khỏi phòng bằng cách đặt roomId = null
-      editTenant(tenantId, { roomId: null as any });
+      // 1. Gỡ người thuê khỏi phòng bằng cách đặt roomId = null và isPrimary = false
+      editTenant(tenantId, { roomId: null as any, isPrimary: false });
 
-      // 2. Nếu người bị gỡ đang là chủ phòng, chọn người khác làm chủ phòng mới hoặc reset
+      // 2. Nếu người bị gỡ đang là chủ phòng, chọn người khác làm chủ phòng mới
       if (isPrimary && detailRoom) {
         const otherTenants = detailRoomTenants.filter(t => t.id !== tenantId);
-        const nextPrimaryName = otherTenants.length > 0 ? otherTenants[0].name : "";
-        const nextPrimaryDeposit = otherTenants.length > 0 ? otherTenants[0].deposit : 0;
-        
-        editRoom(detailRoom.id, { 
-          tenantName: nextPrimaryName, 
-          deposit: nextPrimaryDeposit 
-        });
-
-        // Cập nhật state cục bộ để giao diện phản ánh thay đổi ngay lập tức
-        setDetailRoom({
-          ...detailRoom,
-          tenantName: nextPrimaryName,
-          deposit: nextPrimaryDeposit
-        });
+        if (otherTenants.length > 0) {
+          editTenant(otherTenants[0].id, { isPrimary: true });
+        }
       }
     }
   };
@@ -528,7 +514,7 @@ export default function RoomsPage() {
       </div>
 
       {/* Initial loading state */}
-      {isFetching > 0 && rooms.length === 0 ? (
+      {!mounted || (isFetching > 0 && rooms.length === 0) ? (
         <div className="flex items-center justify-center py-24">
           <div className="flex flex-col items-center gap-3">
             <Loader2 className="size-8 text-stone-400 animate-spin" />
@@ -720,7 +706,7 @@ export default function RoomsPage() {
                 {detailRoomTenants.length > 0 ? (
                   <div className="space-y-2">
                     {detailRoomTenants.map((tenant) => {
-                      const isPrimary = tenant.name === detailRoom?.tenantName;
+                      const isPrimary = tenant.isPrimary;
                       return (
                         <div key={tenant.id} className="flex items-center justify-between p-3 rounded-lg border border-stone-200 bg-stone-50/50">
                           <div className="flex items-center gap-3">
@@ -752,7 +738,7 @@ export default function RoomsPage() {
                                   variant="ghost"
                                   className="text-[10px] h-6 px-2 text-stone-500 hover:text-amber-600 mt-1"
                                   onClick={() => {
-                                    editRoom(detailRoom!.id, { tenantName: tenant.name, deposit: tenant.deposit });
+                                    editTenant(tenant.id, { isPrimary: true });
                                   }}
                                 >
                                   <Crown className="w-3 h-3 mr-1" /> Đặt làm chủ phòng

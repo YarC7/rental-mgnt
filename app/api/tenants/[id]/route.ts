@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { tenants, rooms } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, and, ne } from "drizzle-orm";
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -21,6 +21,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     if (body.deposit !== undefined) updateData.deposit = Number(body.deposit);
     if (body.roomId !== undefined) updateData.roomId = body.roomId;
     if (body.identityCardIssueDate !== undefined) updateData.identityCardIssueDate = body.identityCardIssueDate;
+    if (body.isPrimary !== undefined) updateData.isPrimary = body.isPrimary;
 
     // Get old tenant record to know their current roomId
     const oldTenant = await db
@@ -41,6 +42,17 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         .set(updateData)
         .where(eq(tenants.id, id))
         .returning();
+
+      // If this tenant is now primary, update all other tenants in the same room to non-primary
+      if (updateData.isPrimary === true) {
+        const currentRoomId = updatedTenant[0].roomId;
+        if (currentRoomId) {
+          await tx
+            .update(tenants)
+            .set({ isPrimary: false })
+            .where(and(eq(tenants.roomId, currentRoomId), ne(tenants.id, id)));
+        }
+      }
 
       // If the tenant was in a room and has been unlinked or moved
       if (oldRoomId && (body.roomId === null || body.roomId === "" || body.roomId !== oldRoomId)) {

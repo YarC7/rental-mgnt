@@ -1,4 +1,4 @@
-import { pgTable, text, integer, timestamp, uniqueIndex, index } from "drizzle-orm/pg-core";
+import { pgTable, text, integer, timestamp, uniqueIndex, index, boolean } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 
 // ==========================================
@@ -21,7 +21,7 @@ export const hostelsRelations = relations(hostels, ({ many }) => ({
 // 2. Rooms Table
 // ==========================================
 export const rooms = pgTable("rooms", {
-  id: text("id").primaryKey(), 
+  id: text("id").primaryKey(),
   hostelId: text("hostel_id").notNull().references(() => hostels.id, { onDelete: "cascade" }),
   number: text("number").notNull(),
   price: integer("price").notNull(),
@@ -37,8 +37,7 @@ export const roomsRelations = relations(rooms, ({ one, many }) => ({
     fields: [rooms.hostelId],
     references: [hostels.id],
   }),
-  // SỬA LỖI: Quan hệ 1-1 với tenant được đơn giản hóa ở bảng không chứa FK
-  tenant: one(tenants), 
+  tenants: many(tenants),
   invoices: many(invoices),
 }));
 
@@ -46,7 +45,7 @@ export const roomsRelations = relations(rooms, ({ one, many }) => ({
 // 3. Tenants Table
 // ==========================================
 export const tenants = pgTable("tenants", {
-  id: text("id").primaryKey(), 
+  id: text("id").primaryKey(),
   hostelId: text("hostel_id").notNull().references(() => hostels.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   phone: text("phone").notNull(),           // Số điện thoại
@@ -59,6 +58,7 @@ export const tenants = pgTable("tenants", {
   identityCardIssueDate: text("identity_card_issue_date"),
   roomId: text("room_id").references(() => rooms.id, { onDelete: "set null" }),
   startDate: timestamp("start_date").notNull(),
+  isPrimary: boolean("is_primary").notNull().default(false),
   deposit: integer("deposit").notNull().default(0),
 }, (table) => [
   index("tenants_hostel_id_idx").on(table.hostelId),
@@ -80,7 +80,7 @@ export const tenantsRelations = relations(tenants, ({ one }) => ({
 // 4. Services Table
 // ==========================================
 export const services = pgTable("services", {
-  id: text("id").primaryKey(), 
+  id: text("id").primaryKey(),
   hostelId: text("hostel_id").notNull().references(() => hostels.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   price: integer("price").notNull(),
@@ -102,7 +102,7 @@ export const servicesRelations = relations(services, ({ one }) => ({
 // 5. Invoices Table
 // ==========================================
 export const invoices = pgTable("invoices", {
-  id: text("id").primaryKey(), 
+  id: text("id").primaryKey(),
   hostelId: text("hostel_id").notNull().references(() => hostels.id, { onDelete: "cascade" }),
   roomId: text("room_id").references(() => rooms.id, { onDelete: "set null" }), // Giữ hóa đơn kể cả khi phòng bị xóa
   roomNumber: text("room_number").notNull(), // Tốt! Lưu snapshot đề phòng đổi số phòng
@@ -113,7 +113,7 @@ export const invoices = pgTable("invoices", {
   waterCost: integer("water_cost").notNull().default(0),
   otherServicesCost: integer("other_services_cost").notNull().default(0),
   total: integer("total").notNull(),
-  status: text("status").$type<"paid" | "unpaid">().notNull().default("unpaid"),
+  status: text("status").$type<"unpaid" | "partial" | "paid">().notNull().default("unpaid"),
   createdAt: timestamp("created_at").defaultNow().notNull(), // Tối ưu: Thống nhất kiểu dữ liệu timestamp
 }, (table) => [
   index("invoices_hostel_id_idx").on(table.hostelId),
@@ -128,5 +128,27 @@ export const invoicesRelations = relations(invoices, ({ one }) => ({
   room: one(rooms, {
     fields: [invoices.roomId],
     references: [rooms.id],
+  }),
+}));
+
+
+// ==========================================
+// 6. Payments Table
+// ==========================================
+export const payments = pgTable("payments", {
+  id: text("id").primaryKey(),
+  invoiceId: text("invoice_id").notNull().references(() => invoices.id, { onDelete: "cascade" }),
+  amount: integer("amount").notNull(),
+  paidAt: timestamp("paid_at").defaultNow().notNull(),
+  method: text("method").$type<"cash" | "bank_transfer" | "other">().notNull().default("cash"),
+  note: text("note").notNull().default(""),
+}, (table) => [
+  index("payments_invoice_id_idx").on(table.invoiceId),
+]);
+
+export const paymentsRelations = relations(payments, ({ one }) => ({
+  invoice: one(invoices, {
+    fields: [payments.invoiceId],
+    references: [invoices.id],
   }),
 }));

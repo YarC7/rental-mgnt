@@ -56,6 +56,7 @@ async function main() {
         roomId: roomId,
         startDate: new Date("2026-01-15"),
         deposit: 2500000,
+        isPrimary: true,
       },
       {
         id: `t_a${i}_2`,
@@ -69,6 +70,7 @@ async function main() {
         roomId: roomId,
         startDate: new Date("2026-01-15"),
         deposit: 0,
+        isPrimary: false,
       }
     );
   }
@@ -102,6 +104,7 @@ async function main() {
         roomId: roomId,
         startDate: new Date("2026-02-10"),
         deposit: 3500000,
+        isPrimary: true,
       },
       {
         id: `t_b${i}_2`,
@@ -115,6 +118,7 @@ async function main() {
         roomId: roomId,
         startDate: new Date("2026-02-10"),
         deposit: 0,
+        isPrimary: false,
       }
     );
   }

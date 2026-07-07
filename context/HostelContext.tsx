@@ -32,6 +32,7 @@ export interface Tenant {
   roomId?: string;           // ID của phòng trọ từ Database
   startDate: string;         // Ngày bắt đầu ở
   deposit: number;           // Tiền cọc phòng
+  isPrimary: boolean;        // Chủ phòng hay ở ghép
 }
 
 export interface Service {
@@ -182,11 +183,19 @@ export const HostelProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const tenantsList = rawTenants || (EMPTY_ARRAY as Tenant[]);
 
     const enriched = roomsList.map((room) => {
-      const activeTenant = tenantsList.find(
-        (t) => t.hostelId === room.hostelId && t.roomId === room.id
+      let activeTenant = tenantsList.find(
+        (t) => t.hostelId === room.hostelId && t.roomId === room.id && t.isPrimary
       ) || tenantsList.find(
-        (t) => t.hostelId === room.hostelId && t.roomNumber === room.number
+        (t) => t.hostelId === room.hostelId && t.roomNumber === room.number && t.isPrimary
       );
+
+      if (!activeTenant) {
+        activeTenant = tenantsList.find(
+          (t) => t.hostelId === room.hostelId && t.roomId === room.id
+        ) || tenantsList.find(
+          (t) => t.hostelId === room.hostelId && t.roomNumber === room.number
+        );
+      }
 
       if (room.status === "maintenance") return room;
 

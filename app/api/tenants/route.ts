@@ -15,7 +15,7 @@ export async function GET() {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { hostelId, name, phone, email, identityCard, dob, gender, birthYear, permanentAddress, identityCardIssueDate, roomNumber, startDate, deposit } = body;
+    const { hostelId, name, phone, email, identityCard, dob, gender, birthYear, permanentAddress, identityCardIssueDate, roomNumber, startDate, deposit, isPrimary } = body;
 
     // Find the room by number and hostelId
     const roomRecord = await db
@@ -32,7 +32,15 @@ export async function POST(req: Request) {
     const newId = `t_${Date.now()}`;
 
     const result = await db.transaction(async (tx) => {
-      // 1. Insert tenant
+      // 1. If this tenant is primary, set all other tenants in the same room to non-primary
+      if (isPrimary) {
+        await tx
+          .update(tenants)
+          .set({ isPrimary: false })
+          .where(eq(tenants.roomId, roomId));
+      }
+
+      // 2. Insert tenant
       const newTenant = await tx.insert(tenants).values({
         id: newId,
         hostelId,
@@ -48,9 +56,10 @@ export async function POST(req: Request) {
         roomId,
         startDate: new Date(startDate),
         deposit: Number(deposit),
+        isPrimary: !!isPrimary,
       }).returning();
 
-      // 2. Update room status to 'rented'
+      // 3. Update room status to 'rented'
       await tx
         .update(rooms)
         .set({ status: "rented" })
