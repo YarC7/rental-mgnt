@@ -164,37 +164,99 @@ async function main() {
   ]);
   console.log("Inserted services.");
 
-  // 6. Insert Invoices (Hóa đơn mẫu của phòng 1 khu A và phòng 1 khu B)
+  // 6. Insert Invoices (Hóa đơn mẫu đồng bộ với lịch sử điện nước và đơn giá mới)
   await db.insert(invoices).values([
+    // Hostel A - Room a1
     {
-      id: "i1",
+      id: "i_a1_04",
+      hostelId: "A",
+      roomId: "a1",
+      roomNumber: "1",
+      tenantName: "Nguyễn Văn Khách Phòng 1-A",
+      month: "2026-04",
+      roomPrice: 2500000,
+      electricityCost: 120 * 3000, // 100 -> 220 = 120 kWh
+      waterCost: 8 * 5000,         // 10 -> 18 = 8 m3
+      otherServicesCost: 20000 + 30000,
+      total: 2500000 + (120 * 3000) + (8 * 5000) + 50000,
+      status: "paid",
+      createdAt: new Date("2026-04-30"),
+    },
+    {
+      id: "i_a1_05",
       hostelId: "A",
       roomId: "a1",
       roomNumber: "1",
       tenantName: "Nguyễn Văn Khách Phòng 1-A",
       month: "2026-05",
       roomPrice: 2500000,
-      electricityCost: 45 * 3000,
-      waterCost: 8 * 5000,
-      otherServicesCost: 100000 + 50000,
-      total: 2500000 + (45 * 3000) + (8 * 5000) + 150000,
+      electricityCost: 130 * 3000, // 220 -> 350 = 130 kWh
+      waterCost: 9 * 5000,         // 18 -> 27 = 9 m3
+      otherServicesCost: 20000 + 30000,
+      total: 2500000 + (130 * 3000) + (9 * 5000) + 50000,
       status: "paid",
       createdAt: new Date("2026-05-30"),
     },
     {
-      id: "i3",
+      id: "i_a1_06",
+      hostelId: "A",
+      roomId: "a1",
+      roomNumber: "1",
+      tenantName: "Nguyễn Văn Khách Phòng 1-A",
+      month: "2026-06",
+      roomPrice: 2500000,
+      electricityCost: 140 * 3000, // 350 -> 490 = 140 kWh
+      waterCost: 10 * 5000,        // 27 -> 37 = 10 m3
+      otherServicesCost: 20000 + 30000,
+      total: 2500000 + (140 * 3000) + (10 * 5000) + 50000,
+      status: "unpaid",
+      createdAt: new Date("2026-06-30"),
+    },
+    // Hostel B - Room b1
+    {
+      id: "i_b1_04",
+      hostelId: "B",
+      roomId: "b1",
+      roomNumber: "1",
+      tenantName: "Lê Văn Khách Phòng 1-B",
+      month: "2026-04",
+      roomPrice: 3500000,
+      electricityCost: 150 * 3000, // 200 -> 350 = 150 kWh
+      waterCost: 13 * 5000,        // 15 -> 28 = 13 m3
+      otherServicesCost: 20000 + 30000,
+      total: 3500000 + (150 * 3000) + (13 * 5000) + 50000,
+      status: "paid",
+      createdAt: new Date("2026-04-30"),
+    },
+    {
+      id: "i_b1_05",
       hostelId: "B",
       roomId: "b1",
       roomNumber: "1",
       tenantName: "Lê Văn Khách Phòng 1-B",
       month: "2026-05",
       roomPrice: 3500000,
-      electricityCost: 80 * 3000,
-      waterCost: 15 * 5000,
-      otherServicesCost: 120000 + 150000,
-      total: 3500000 + (80 * 4000) + (15 * 18000) + 270000,
+      electricityCost: 160 * 3000, // 350 -> 510 = 160 kWh
+      waterCost: 17 * 5000,        // 28 -> 45 = 17 m3
+      otherServicesCost: 20000 + 30000,
+      total: 3500000 + (160 * 3000) + (17 * 5000) + 50000,
       status: "paid",
       createdAt: new Date("2026-05-30"),
+    },
+    {
+      id: "i_b1_06",
+      hostelId: "B",
+      roomId: "b1",
+      roomNumber: "1",
+      tenantName: "Lê Văn Khách Phòng 1-B",
+      month: "2026-06",
+      roomPrice: 3500000,
+      electricityCost: 170 * 3000, // 510 -> 680 = 170 kWh
+      waterCost: 20 * 5000,        // 45 -> 65 = 20 m3
+      otherServicesCost: 20000 + 30000,
+      total: 3500000 + (170 * 3000) + (20 * 5000) + 50000,
+      status: "unpaid",
+      createdAt: new Date("2026-06-30"),
     },
   ]);
   console.log("Inserted invoices.");

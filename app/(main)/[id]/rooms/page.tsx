@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useIsFetching } from "@tanstack/react-query";
-import { Plus, Search, Home, MoreVertical, Edit2, Trash2, ShieldAlert, LayoutGrid, List, ArrowUpDown, ArrowUp, ArrowDown, User, Crown, Loader2, QrCode } from "lucide-react";
+import { Plus, Search, Home, MoreVertical, Edit2, Trash2, ShieldAlert, LayoutGrid, List, ArrowUpDown, ArrowUp, ArrowDown, User, Crown, Loader2, QrCode, ChevronDown, ChevronUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -44,7 +44,7 @@ import {
 import { Html5Qrcode } from "html5-qrcode";
 
 export default function RoomsPage() {
-  const { rooms, tenants, addRoom, editRoom, deleteRoom, addTenant, editTenant, currentHostel, getRoomUsages, saveRoomUsage } = useHostel();
+  const { rooms, tenants, addRoom, editRoom, deleteRoom, addTenant, editTenant, currentHostel, getRoomUsages, saveRoomUsage, invoices } = useHostel();
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
@@ -68,6 +68,11 @@ export default function RoomsPage() {
   const [recordWaterEnd, setRecordWaterEnd] = useState("");
   const [isRecording, setIsRecording] = useState(false);
   const [isFormOpen, setIsFormOpen] = useState(false);
+
+  // Accordion States
+  const [isRoomInfoOpen, setIsRoomInfoOpen] = useState(true);
+  const [isTenantsOpen, setIsTenantsOpen] = useState(true);
+  const [isUtilitiesOpen, setIsUtilitiesOpen] = useState(true);
 
   // Form State
   const [isOpenAdd, setIsOpenAdd] = useState(false);
@@ -731,259 +736,333 @@ export default function RoomsPage() {
             <div className="space-y-5 overflow-y-auto pr-1">
               {/* Room Info Section */}
               <div>
-                <h4 className="text-xs font-semibold text-stone-700 mb-3 uppercase tracking-wide">Thông tin phòng</h4>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <Label htmlFor="detail-number" className="text-stone-700 text-xs font-medium">Số phòng</Label>
-                    <Input id="detail-number" placeholder="Ví dụ: 104" value={formNumber} onChange={(e) => setFormNumber(e.target.value)} required />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="detail-status" className="text-stone-700 text-xs font-medium">Trạng thái</Label>
-                    <NativeSelect id="detail-status" value={formStatus} onChange={(e) => setFormStatus(e.target.value as any)}>
-                      <option value="empty">Đang trống</option>
-                      <option value="rented">Đã thuê</option>
-                      <option value="maintenance">Bảo trì</option>
-                    </NativeSelect>
-                  </div>
+                <div 
+                  className="flex items-center justify-between cursor-pointer pb-2 border-b border-stone-100 mb-3"
+                  onClick={() => setIsRoomInfoOpen(!isRoomInfoOpen)}
+                >
+                  <h4 className="text-xs font-semibold text-stone-700 uppercase tracking-wide">Thông tin phòng</h4>
+                  {isRoomInfoOpen ? <ChevronUp className="w-4 h-4 text-stone-500" /> : <ChevronDown className="w-4 h-4 text-stone-500" />}
                 </div>
-                <div className="grid grid-cols-2 gap-4 mt-4">
-                  <div className="space-y-1.5">
-                    <Label htmlFor="detail-price" className="text-stone-700 text-xs font-medium">Giá thuê (VND/tháng)</Label>
-                    <Input id="detail-price" type="number" placeholder="2500000" value={formPrice} onChange={(e) => setFormPrice(e.target.value)} required />
+
+                {isRoomInfoOpen && (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-1.5">
+                        <Label htmlFor="detail-number" className="text-stone-700 text-xs font-medium">Số phòng</Label>
+                        <Input id="detail-number" placeholder="Ví dụ: 104" value={formNumber} onChange={(e) => setFormNumber(e.target.value)} required />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="detail-status" className="text-stone-700 text-xs font-medium">Trạng thái</Label>
+                        <NativeSelect id="detail-status" value={formStatus} onChange={(e) => setFormStatus(e.target.value as any)}>
+                          <option value="empty">Đang trống</option>
+                          <option value="rented">Đã thuê</option>
+                          <option value="maintenance">Bảo trì</option>
+                        </NativeSelect>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4 mt-4">
+                      <div className="space-y-1.5">
+                        <Label htmlFor="detail-price" className="text-stone-700 text-xs font-medium">Giá thuê (VND/tháng)</Label>
+                        <Input id="detail-price" type="number" placeholder="2500000" value={formPrice} onChange={(e) => setFormPrice(e.target.value)} required />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="detail-area" className="text-stone-700 text-xs font-medium">Diện tích (m²)</Label>
+                        <Input id="detail-area" type="number" placeholder="25" value={formArea} onChange={(e) => setFormArea(e.target.value)} required />
+                      </div>
+                    </div>
+                    <div className="space-y-1.5 mt-4">
+                      <Label htmlFor="detail-desc" className="text-stone-700 text-xs font-medium">Mô tả phòng</Label>
+                      <Input id="detail-desc" placeholder="Gác lửng, tủ đồ, máy lạnh..." value={formDesc} onChange={(e) => setFormDesc(e.target.value)} />
+                    </div>
                   </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="detail-area" className="text-stone-700 text-xs font-medium">Diện tích (m²)</Label>
-                    <Input id="detail-area" type="number" placeholder="25" value={formArea} onChange={(e) => setFormArea(e.target.value)} required />
-                  </div>
-                </div>
-                <div className="space-y-1.5 mt-4">
-                  <Label htmlFor="detail-desc" className="text-stone-700 text-xs font-medium">Mô tả phòng</Label>
-                  <Input id="detail-desc" placeholder="Gác lửng, tủ đồ, máy lạnh..." value={formDesc} onChange={(e) => setFormDesc(e.target.value)} />
-                </div>
+                )}
               </div>
 
               {/* Tenants Section */}
-              <div>
-                <div className="flex items-center justify-between mb-3">
+              <div className="pt-2">
+                <div 
+                  className="flex items-center justify-between cursor-pointer pb-2 border-b border-stone-100 mb-3"
+                  onClick={() => setIsTenantsOpen(!isTenantsOpen)}
+                >
                   <h4 className="text-xs font-semibold text-stone-700 uppercase tracking-wide">
                     Người thuê ({detailRoomTenants.length})
                   </h4>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="text-[11px] h-7 px-2.5 border-stone-300 text-stone-700"
-                    onClick={() => setIsOpenAddTenant(true)}
-                  >
-                    <Plus className="w-3 h-3 mr-1" /> Thêm người thuê
-                  </Button>
+                  <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="text-[11px] h-7 px-2.5 border-stone-300 text-stone-700"
+                      onClick={() => setIsOpenAddTenant(true)}
+                    >
+                      <Plus className="w-3 h-3 mr-1" /> Thêm người thuê
+                    </Button>
+                    <div className="cursor-pointer" onClick={() => setIsTenantsOpen(!isTenantsOpen)}>
+                      {isTenantsOpen ? <ChevronUp className="w-4 h-4 text-stone-500" /> : <ChevronDown className="w-4 h-4 text-stone-500" />}
+                    </div>
+                  </div>
                 </div>
-                {detailRoomTenants.length > 0 ? (
-                  <div className="space-y-2">
-                    {detailRoomTenants.map((tenant) => {
-                      const isPrimary = tenant.isPrimary;
-                      return (
-                        <div key={tenant.id} className="flex items-center justify-between p-3 rounded-lg border border-stone-200 bg-stone-50/50">
-                          <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-full bg-stone-200 flex items-center justify-center text-stone-600">
-                              <User className="w-4 h-4" />
-                            </div>
-                            <div>
-                              <div className="flex items-center gap-1.5 flex-wrap">
-                                {isPrimary && (
-                                  <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 shrink-0">
-                                    <Crown className="w-3 h-3" /> Chủ phòng
-                                  </span>
-                                )}
-                                <p className="text-sm font-semibold text-stone-900">{tenant.name}</p>
+
+                {isTenantsOpen && (
+                  <div>
+                    {detailRoomTenants.length > 0 ? (
+                      <div className="space-y-2">
+                        {detailRoomTenants.map((tenant) => {
+                          const isPrimary = tenant.isPrimary;
+                          return (
+                            <div key={tenant.id} className="flex items-center justify-between p-3 rounded-lg border border-stone-200 bg-stone-50/50">
+                              <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 rounded-full bg-stone-200 flex items-center justify-center text-stone-600">
+                                  <User className="w-4 h-4" />
+                                </div>
+                                <div>
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    {isPrimary && (
+                                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 shrink-0">
+                                        <Crown className="w-3 h-3" /> Chủ phòng
+                                      </span>
+                                    )}
+                                    <p className="text-sm font-semibold text-stone-900">{tenant.name}</p>
+                                  </div>
+                                  <p className="text-[11px] text-stone-500">{tenant.phone}</p>
+                                </div>
                               </div>
-                              <p className="text-[11px] text-stone-500">{tenant.phone}</p>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <div className="text-right">
-                              {tenant.deposit > 0 && (
-                                <p className="text-xs text-stone-600">
-                                  Cọc: <span className="font-semibold text-stone-900">{formatPrice(tenant.deposit)}</span>
-                                </p>
-                              )}
-                              {!isPrimary && detailRoom?.tenantName && (
+                              <div className="flex items-center gap-2">
+                                <div className="text-right">
+                                  {tenant.deposit > 0 && (
+                                    <p className="text-xs text-stone-600">
+                                      Cọc: <span className="font-semibold text-stone-900">{formatPrice(tenant.deposit)}</span>
+                                    </p>
+                                  )}
+                                  {!isPrimary && detailRoom?.tenantName && (
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      className="text-[10px] h-6 px-2 text-stone-500 hover:text-amber-600 mt-1"
+                                      onClick={() => {
+                                        editTenant(tenant.id, { isPrimary: true });
+                                      }}
+                                    >
+                                      <Crown className="w-3 h-3 mr-1" /> Đặt làm chủ phòng
+                                    </Button>
+                                  )}
+                                </div>
                                 <Button
                                   type="button"
                                   variant="ghost"
-                                  className="text-[10px] h-6 px-2 text-stone-500 hover:text-amber-600 mt-1"
-                                  onClick={() => {
-                                    editTenant(tenant.id, { isPrimary: true });
-                                  }}
+                                  size="icon"
+                                  className="h-8 w-8 text-stone-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg"
+                                  title="Gỡ khỏi phòng"
+                                  onClick={() => handleUnlinkTenant(tenant.id, tenant.name, isPrimary)}
                                 >
-                                  <Crown className="w-3 h-3 mr-1" /> Đặt làm chủ phòng
+                                  <Trash2 className="w-4 h-4" />
                                 </Button>
-                              )}
+                              </div>
                             </div>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8 text-stone-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg"
-                              title="Gỡ khỏi phòng"
-                              onClick={() => handleUnlinkTenant(tenant.id, tenant.name, isPrimary)}
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <div className="text-center py-6 text-stone-400 text-xs">
-                    <User className="w-6 h-6 mx-auto mb-1" />
-                    Chưa có người thuê
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="text-center py-6 text-stone-400 text-xs">
+                        <User className="w-6 h-6 mx-auto mb-1" />
+                        Chưa có người thuê
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
 
               {/* Utility Index History & Logging Section */}
-              <div className="pt-4 border-t border-stone-100 space-y-4">
-                <div className="flex items-center justify-between">
+              <div className="pt-2 border-t border-stone-100 space-y-4">
+                <div 
+                  className="flex items-center justify-between cursor-pointer pb-2 border-b border-stone-100 mb-3"
+                  onClick={() => setIsUtilitiesOpen(!isUtilitiesOpen)}
+                >
                   <h4 className="text-xs font-semibold text-stone-700 uppercase tracking-wide">Chỉ số điện nước</h4>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="text-[11px] h-7 px-2.5 border-stone-300 text-stone-700"
-                    onClick={() => setIsFormOpen(!isFormOpen)}
-                  >
-                    {isFormOpen ? "Hủy" : "Ghi chỉ số"}
-                  </Button>
-                </div>
-
-                {isFormOpen && (
-                  <div className="p-3 border border-stone-200 bg-stone-50/50 rounded-lg space-y-3">
-                    <h5 className="text-[11px] font-semibold text-stone-700">Ghi chỉ số sử dụng</h5>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-1.5 col-span-2">
-                        <Label htmlFor="usage-month" className="text-[11px] text-stone-600 font-medium">Tháng ghi nhận</Label>
-                        <Input
-                          id="usage-month"
-                          type="month"
-                          className="h-8 text-xs bg-white"
-                          value={recordMonth}
-                          onChange={(e) => setRecordMonth(e.target.value)}
-                          required
-                        />
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label htmlFor="elec-start" className="text-[11px] text-stone-600 font-medium">Điện bắt đầu (kWh)</Label>
-                        <Input
-                          id="elec-start"
-                          type="number"
-                          className="h-8 text-xs bg-white"
-                          placeholder="0"
-                          value={recordElecStart}
-                          onChange={(e) => setRecordElecStart(e.target.value)}
-                        />
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label htmlFor="elec-end" className="text-[11px] text-stone-600 font-medium">Điện kết thúc (kWh)</Label>
-                        <Input
-                          id="elec-end"
-                          type="number"
-                          className="h-8 text-xs bg-white"
-                          placeholder="0"
-                          value={recordElecEnd}
-                          onChange={(e) => setRecordElecEnd(e.target.value)}
-                        />
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label htmlFor="water-start" className="text-[11px] text-stone-600 font-medium">Nước bắt đầu (m³)</Label>
-                        <Input
-                          id="water-start"
-                          type="number"
-                          className="h-8 text-xs bg-white"
-                          placeholder="0"
-                          value={recordWaterStart}
-                          onChange={(e) => setRecordWaterStart(e.target.value)}
-                        />
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label htmlFor="water-end" className="text-[11px] text-stone-600 font-medium">Nước kết thúc (m³)</Label>
-                        <Input
-                          id="water-end"
-                          type="number"
-                          className="h-8 text-xs bg-white"
-                          placeholder="0"
-                          value={recordWaterEnd}
-                          onChange={(e) => setRecordWaterEnd(e.target.value)}
-                        />
-                      </div>
-                    </div>
+                  <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
                     <Button
                       type="button"
-                      disabled={isRecording}
-                      onClick={handleSaveUsage}
-                      className="w-full h-8 bg-stone-900 hover:bg-stone-850 text-white text-[11px]"
+                      variant="outline"
+                      size="sm"
+                      className="text-[11px] h-7 px-2.5 border-stone-300 text-stone-700"
+                      onClick={() => setIsFormOpen(!isFormOpen)}
                     >
-                      {isRecording ? "Đang lưu..." : "Lưu chỉ số"}
+                      {isFormOpen ? "Hủy" : "Ghi chỉ số"}
                     </Button>
+                    <div className="cursor-pointer" onClick={() => setIsUtilitiesOpen(!isUtilitiesOpen)}>
+                      {isUtilitiesOpen ? <ChevronUp className="w-4 h-4 text-stone-500" /> : <ChevronDown className="w-4 h-4 text-stone-500" />}
+                    </div>
                   </div>
-                )}
+                </div>
 
-                {/* Residency Filtering Dropdown */}
-                {historicalTenants.length > 0 && (
-                  <div className="flex items-center justify-between bg-stone-50 p-2.5 rounded-lg border border-stone-200">
-                    <Label htmlFor="filter-tenant" className="text-[11px] font-medium text-stone-600">Lọc theo khách thuê:</Label>
-                    <NativeSelect
-                      id="filter-tenant"
-                      className="text-[11px] h-7 w-48 py-0.5 bg-white border border-stone-200"
-                      value={selectedTenantFilter}
-                      onChange={(e) => setSelectedTenantFilter(e.target.value)}
-                    >
-                      <option value="all">Tất cả thời gian</option>
-                      {historicalTenants.map((t) => (
-                        <option key={t.id} value={t.id}>
-                          {t.name} {t.deletedAt ? "(Đã dời đi)" : "(Hiện tại)"}
-                        </option>
-                      ))}
-                    </NativeSelect>
-                  </div>
-                )}
-
-                {/* Usage Log List */}
-                {isLoadingUsages ? (
-                  <div className="flex items-center justify-center py-6 text-stone-400 text-xs gap-1.5">
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" /> Đang tải lịch sử...
-                  </div>
-                ) : usagesList.length > 0 ? (
-                  <div className="border border-stone-200 rounded-lg overflow-hidden divide-y divide-stone-150">
-                    {usagesList.map((usage) => {
-                      const electricityUsed = usage.electricityEnd - usage.electricityStart;
-                      const waterUsed = usage.waterEnd - usage.waterStart;
-                      return (
-                        <div key={usage.id} className="p-3 bg-white text-stone-800 space-y-2 hover:bg-stone-50/50 transition-colors">
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs font-semibold text-stone-900 bg-stone-100 px-2 py-0.5 rounded">Tháng {usage.month}</span>
-                            <span className="text-[10px] text-stone-400">Ghi nhận: {new Date(usage.createdAt).toLocaleDateString("vi-VN")}</span>
+                {isUtilitiesOpen && (
+                  <div className="space-y-4">
+                    {isFormOpen && (
+                      <div className="p-3 border border-stone-200 bg-stone-50/50 rounded-lg space-y-3">
+                        <h5 className="text-[11px] font-semibold text-stone-700">Ghi chỉ số sử dụng</h5>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="space-y-1.5 col-span-2">
+                            <Label htmlFor="usage-month" className="text-[11px] text-stone-600 font-medium">Tháng ghi nhận</Label>
+                            <Input
+                              id="usage-month"
+                              type="month"
+                              className="h-8 text-xs bg-white"
+                              value={recordMonth}
+                              onChange={(e) => setRecordMonth(e.target.value)}
+                              required
+                            />
                           </div>
-                          <div className="grid grid-cols-2 gap-4 text-xs">
-                            <div className="space-y-0.5">
-                              <p className="text-[10px] text-stone-500 font-medium">Điện tiêu thụ</p>
-                              <p className="font-semibold text-stone-900">{electricityUsed >= 0 ? `${electricityUsed} kWh` : "Chưa có chỉ số cuối"}</p>
-                              <p className="text-[10px] text-stone-400">Chỉ số: {usage.electricityStart} → {usage.electricityEnd}</p>
-                            </div>
-                            <div className="space-y-0.5">
-                              <p className="text-[10px] text-stone-500 font-medium">Nước tiêu thụ</p>
-                              <p className="font-semibold text-stone-900">{waterUsed >= 0 ? `${waterUsed} m³` : "Chưa có chỉ số cuối"}</p>
-                              <p className="text-[10px] text-stone-400">Chỉ số: {usage.waterStart} → {usage.waterEnd}</p>
-                            </div>
+                          <div className="space-y-1.5">
+                            <Label htmlFor="elec-start" className="text-[11px] text-stone-600 font-medium">Điện bắt đầu (kWh)</Label>
+                            <Input
+                              id="elec-start"
+                              type="number"
+                              className="h-8 text-xs bg-white"
+                              placeholder="0"
+                              value={recordElecStart}
+                              onChange={(e) => setRecordElecStart(e.target.value)}
+                            />
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label htmlFor="elec-end" className="text-[11px] text-stone-600 font-medium">Điện kết thúc (kWh)</Label>
+                            <Input
+                              id="elec-end"
+                              type="number"
+                              className="h-8 text-xs bg-white"
+                              placeholder="0"
+                              value={recordElecEnd}
+                              onChange={(e) => setRecordElecEnd(e.target.value)}
+                            />
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label htmlFor="water-start" className="text-[11px] text-stone-600 font-medium">Nước bắt đầu (m³)</Label>
+                            <Input
+                              id="water-start"
+                              type="number"
+                              className="h-8 text-xs bg-white"
+                              placeholder="0"
+                              value={recordWaterStart}
+                              onChange={(e) => setRecordWaterStart(e.target.value)}
+                            />
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label htmlFor="water-end" className="text-[11px] text-stone-600 font-medium">Nước kết thúc (m³)</Label>
+                            <Input
+                              id="water-end"
+                              type="number"
+                              className="h-8 text-xs bg-white"
+                              placeholder="0"
+                              value={recordWaterEnd}
+                              onChange={(e) => setRecordWaterEnd(e.target.value)}
+                            />
                           </div>
                         </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <div className="text-center py-8 text-stone-400 text-xs">
-                    Chưa có lịch sử điện nước cho khoảng thời gian này
+                        <Button
+                          type="button"
+                          disabled={isRecording}
+                          onClick={handleSaveUsage}
+                          className="w-full h-8 bg-stone-900 hover:bg-stone-850 text-white text-[11px]"
+                        >
+                          {isRecording ? "Đang lưu..." : "Lưu chỉ số"}
+                        </Button>
+                      </div>
+                    )}
+
+                    {/* Residency Filtering Dropdown */}
+                    {historicalTenants.length > 0 && (
+                      <div className="flex items-center justify-between bg-stone-50 p-2.5 rounded-lg border border-stone-200">
+                        <Label htmlFor="filter-tenant" className="text-[11px] font-medium text-stone-600">Lọc theo khách thuê:</Label>
+                        <NativeSelect
+                          id="filter-tenant"
+                          className="text-[11px] h-7 w-48 py-0.5 bg-white border border-stone-200"
+                          value={selectedTenantFilter}
+                          onChange={(e) => setSelectedTenantFilter(e.target.value)}
+                        >
+                          <option value="all">Tất cả thời gian</option>
+                          {historicalTenants.map((t) => (
+                            <option key={t.id} value={t.id}>
+                              {t.name} {t.deletedAt ? "(Đã dời đi)" : "(Hiện tại)"}
+                            </option>
+                          ))}
+                        </NativeSelect>
+                      </div>
+                    )}
+
+                    {/* Usage Log List */}
+                    {isLoadingUsages ? (
+                      <div className="flex items-center justify-center py-6 text-stone-400 text-xs gap-1.5">
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" /> Đang tải lịch sử...
+                      </div>
+                    ) : usagesList.length > 0 ? (
+                      <div className="border border-stone-200 rounded-lg overflow-hidden divide-y divide-stone-150">
+                        {usagesList.map((usage) => {
+                          const electricityUsed = usage.electricityEnd - usage.electricityStart;
+                          const waterUsed = usage.waterEnd - usage.waterStart;
+                          const invoice = detailRoom && invoices.find(
+                            (inv) => inv.roomNumber === detailRoom.number && inv.month === usage.month
+                          );
+                          return (
+                            <div key={usage.id} className="p-3 bg-white text-stone-800 space-y-2 hover:bg-stone-50/50 transition-colors">
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs font-semibold text-stone-900 bg-stone-100 px-2 py-0.5 rounded">Tháng {usage.month}</span>
+                                <span className="text-[10px] text-stone-400">Ghi nhận: {new Date(usage.createdAt).toLocaleDateString("vi-VN")}</span>
+                              </div>
+                              <div className="grid grid-cols-2 gap-4 text-xs">
+                                <div className="space-y-0.5">
+                                  <p className="text-[10px] text-stone-500 font-medium">Điện tiêu thụ</p>
+                                  <p className="font-semibold text-stone-900">{electricityUsed >= 0 ? `${electricityUsed} kWh` : "Chưa có chỉ số cuối"}</p>
+                                  <p className="text-[10px] text-stone-400">Chỉ số: {usage.electricityStart} → {usage.electricityEnd}</p>
+                                </div>
+                                <div className="space-y-0.5">
+                                  <p className="text-[10px] text-stone-500 font-medium">Nước tiêu thụ</p>
+                                  <p className="font-semibold text-stone-900">{waterUsed >= 0 ? `${waterUsed} m³` : "Chưa có chỉ số cuối"}</p>
+                                  <p className="text-[10px] text-stone-400">Chỉ số: {usage.waterStart} → {usage.waterEnd}</p>
+                                </div>
+                              </div>
+                              {invoice && (
+                                <div className="mt-3 pt-3 border-t border-dashed border-stone-200 space-y-2">
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-[10px] font-semibold text-stone-500 uppercase tracking-wider">Chi tiết hóa đơn</span>
+                                    {invoice.status === "paid" ? (
+                                      <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200 text-[9px] px-1.5 py-0.5">Đã thanh toán</Badge>
+                                    ) : (
+                                      <Badge className="bg-amber-100 text-amber-800 border-amber-200 text-[9px] px-1.5 py-0.5">Chưa thanh toán</Badge>
+                                    )}
+                                  </div>
+                                  
+                                  <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[11px] text-stone-600 bg-stone-50/50 p-2.5 rounded-lg border border-stone-150">
+                                    <div className="flex justify-between col-span-2 pb-1 border-b border-stone-200 mb-1">
+                                      <span className="font-semibold text-stone-800">Tổng cộng:</span>
+                                      <span className="font-bold text-stone-900">{formatPrice(invoice.total)}</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                      <span>Tiền phòng:</span>
+                                      <span className="font-medium text-stone-800">{formatPrice(invoice.roomPrice)}</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                      <span>Tiền điện:</span>
+                                      <span className="font-medium text-stone-800">{formatPrice(invoice.electricityCost)}</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                      <span>Tiền nước:</span>
+                                      <span className="font-medium text-stone-800">{formatPrice(invoice.waterCost)}</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                      <span>Dịch vụ khác:</span>
+                                      <span className="font-medium text-stone-800">{formatPrice(invoice.otherServicesCost)}</span>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="text-center py-8 text-stone-400 text-xs">
+                        Chưa có lịch sử điện nước cho khoảng thời gian này
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

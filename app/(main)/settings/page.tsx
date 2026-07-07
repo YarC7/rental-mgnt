@@ -33,7 +33,7 @@ export default function SettingsPage() {
   );
 
   // Local state for instant inputs editing
-  const [elecPrice, setElecPrice] = useState(elecService?.price.toString() || "300");
+  const [elecPrice, setElecPrice] = useState(elecService?.price.toString() || "3000");
   const [waterPrice, setWaterPrice] = useState(waterService?.price.toString() || "5000");
 
   const [isSavedElec, setIsSavedElec] = useState(false);
