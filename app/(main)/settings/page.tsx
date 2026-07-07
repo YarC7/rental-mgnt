@@ -33,8 +33,8 @@ export default function SettingsPage() {
   );
 
   // Local state for instant inputs editing
-  const [elecPrice, setElecPrice] = useState(elecService?.price.toString() || "3500");
-  const [waterPrice, setWaterPrice] = useState(waterService?.price.toString() || "15000");
+  const [elecPrice, setElecPrice] = useState(elecService?.price.toString() || "300");
+  const [waterPrice, setWaterPrice] = useState(waterService?.price.toString() || "5000");
 
   const [isSavedElec, setIsSavedElec] = useState(false);
   const [isSavedWater, setIsSavedWater] = useState(false);
@@ -163,7 +163,7 @@ export default function SettingsPage() {
               </div>
             </div>
             <div className="p-3 bg-stone-50 rounded-lg border border-stone-200 text-[11px] text-stone-500 italic">
-              * Giá trị mặc định ban đầu là {formatPrice(15000)}/m³. Thay đổi này chỉ có tác dụng cho khu Nhà trọ {currentHostel}.
+              * Giá trị mặc định ban đầu là {formatPrice(5000)}/m³. Thay đổi này chỉ có tác dụng cho khu Nhà trọ {currentHostel}.
             </div>
           </CardContent>
         </Card>

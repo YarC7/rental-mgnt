@@ -1,11 +1,18 @@
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { tenants, rooms } from "@/db/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, isNull } from "drizzle-orm";
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
-    const allTenants = await db.select().from(tenants);
+    const url = new URL(req.url);
+    const includeDeleted = url.searchParams.get("includeDeleted") === "true";
+
+    let query = db.select().from(tenants);
+    if (!includeDeleted) {
+      query = query.where(isNull(tenants.deletedAt)) as any;
+    }
+    const allTenants = await query;
     return NextResponse.json(allTenants);
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });

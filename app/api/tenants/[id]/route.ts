@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { tenants, rooms } from "@/db/schema";
-import { eq, and, ne } from "drizzle-orm";
+import { eq, and, ne, isNull } from "drizzle-orm";
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -97,15 +97,26 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
     const roomId = tenantRecord[0].roomId;
 
     const result = await db.transaction(async (tx) => {
-      // 1. Delete tenant
-      const deletedTenant = await tx.delete(tenants).where(eq(tenants.id, id)).returning();
+      // 1. Soft-delete tenant: set deletedAt and clear isPrimary (keep roomId for history)
+      const deletedTenant = await tx
+        .update(tenants)
+        .set({ deletedAt: new Date(), isPrimary: false })
+        .where(eq(tenants.id, id))
+        .returning();
 
-      // 2. Set the room status to 'empty'
+      // 2. Set the room status to 'empty' if no remaining tenants are in that room
       if (roomId) {
-        await tx
-          .update(rooms)
-          .set({ status: "empty" })
-          .where(eq(rooms.id, roomId));
+        const remainingTenants = await tx
+          .select()
+          .from(tenants)
+          .where(and(eq(tenants.roomId, roomId), isNull(tenants.deletedAt)));
+
+        if (remainingTenants.length === 0) {
+          await tx
+            .update(rooms)
+            .set({ status: "empty" })
+            .where(eq(rooms.id, roomId));
+        }
       }
 
       return deletedTenant[0];

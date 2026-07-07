@@ -98,6 +98,53 @@ const HostelContext = createContext<HostelContextType | undefined>(undefined);
 // Stable empty array reference to avoid triggering useEffect loops
 const EMPTY_ARRAY: any[] = [];
 
+export interface RoomUsage {
+  id: string;
+  roomId: string;
+  month: string;
+  electricityStart: number;
+  electricityEnd: number;
+  waterStart: number;
+  waterEnd: number;
+  createdAt: string;
+}
+
+export interface Hostel {
+  id: string;
+  name: string;
+  createdAt: string;
+}
+
+interface HostelContextType {
+  currentHostel: string;
+  setCurrentHostel: (hostel: string) => void;
+  hostels: Hostel[];
+  // Rooms
+  rooms: Room[];
+  addRoom: (room: Omit<Room, "id" | "hostelId">) => void;
+  editRoom: (id: string, room: Partial<Room>) => void;
+  deleteRoom: (id: string) => void;
+  // Room Usages
+  getRoomUsages: (roomId: string, tenantId?: string) => Promise<RoomUsage[]>;
+  saveRoomUsage: (roomId: string, usage: Omit<RoomUsage, "id" | "roomId" | "createdAt">) => Promise<RoomUsage>;
+  // Tenants
+  tenants: Tenant[];
+  addTenant: (tenant: Omit<Tenant, "id" | "hostelId">) => void;
+  editTenant: (id: string, tenant: Partial<Tenant>) => void;
+  deleteTenant: (id: string) => void;
+  // Services
+  services: Service[];
+  addService: (service: Omit<Service, "id" | "hostelId">) => void;
+  editService: (id: string, service: Partial<Service>) => void;
+  deleteService: (id: string) => void;
+  toggleServiceStatus: (id: string) => void;
+  // Invoices
+  invoices: Invoice[];
+  addInvoice: (invoice: Omit<Invoice, "id" | "hostelId" | "createdAt">) => void;
+  deleteInvoice: (id: string) => void;
+  toggleInvoicePaid: (id: string) => void;
+}
+
 export const HostelProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const queryClient = useQueryClient();
   const pathname = usePathname();
@@ -412,6 +459,31 @@ export const HostelProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
   };
 
+  const getRoomUsages = async (roomId: string, tenantId?: string): Promise<RoomUsage[]> => {
+    let url = `/api/rooms/${roomId}/usages`;
+    if (tenantId) {
+      url += `?tenantId=${tenantId}`;
+    }
+    const res = await fetch(url);
+    if (!res.ok) throw new Error("Failed to fetch room usages");
+    return res.json();
+  };
+
+  const saveRoomUsage = async (
+    roomId: string,
+    usage: Omit<RoomUsage, "id" | "roomId" | "createdAt">
+  ): Promise<RoomUsage> => {
+    const res = await fetch(`/api/rooms/${roomId}/usages`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(usage),
+    });
+    if (!res.ok) throw new Error("Failed to save room usage");
+    queryClient.invalidateQueries({ queryKey: ["rooms"] });
+    queryClient.invalidateQueries({ queryKey: ["invoices"] });
+    return res.json();
+  };
+
   return (
     <HostelContext.Provider
       value={{
@@ -422,6 +494,8 @@ export const HostelProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         addRoom,
         editRoom,
         deleteRoom,
+        getRoomUsages,
+        saveRoomUsage,
         tenants,
         addTenant,
         editTenant,

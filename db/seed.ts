@@ -2,13 +2,14 @@ import * as dotenv from "dotenv";
 dotenv.config({ path: ".env.local" });
 
 import { db } from "./index";
-import { hostels, rooms, tenants, services, invoices } from "./schema";
+import { hostels, rooms, tenants, services, invoices, roomUsages } from "./schema";
 
 async function main() {
   console.log("Seeding started...");
 
   // 1. Clean existing data (in reverse order of foreign keys)
   await db.delete(invoices);
+  await db.delete(roomUsages);
   await db.delete(tenants);
   await db.delete(services);
   await db.delete(rooms);
@@ -123,6 +124,26 @@ async function main() {
     );
   }
 
+  // Thêm một người thuê đã chuyển đi (soft deleted) để test bộ lọc lịch sử
+  tenantsData.push({
+    id: "t_a1_deleted_1",
+    hostelId: "A",
+    name: "Trần Thị Cựu Khách Phòng 1-A",
+    phone: "0900111222",
+    email: "cuu.khach1a@gmail.com",
+    identityCard: "001099111222",
+    dob: "1995-05-15",
+    gender: "Nữ",
+    birthYear: "1995",
+    permanentAddress: "Hải Phòng",
+    identityCardIssueDate: "2021-10-10",
+    roomId: "a1",
+    startDate: new Date("2025-09-01"),
+    deposit: 0,
+    isPrimary: false,
+    deletedAt: new Date("2026-03-31"),
+  });
+
   // Thực thi insert vào DB
   await db.insert(rooms).values(roomsData);
   console.log(`Inserted ${roomsData.length} rooms.`);
@@ -132,10 +153,10 @@ async function main() {
 
   // 5. Insert Services
   await db.insert(services).values([
-    { id: "s1", hostelId: "A", name: "Điện sinh hoạt", price: 3500, unit: "kWh", status: "active", description: "Tính theo công tơ điện riêng" },
-    { id: "s2", hostelId: "A", name: "Nước sạch", price: 15000, unit: "m³", status: "active", description: "Tính theo khối lượng nước tiêu thụ" },
-    { id: "s3", hostelId: "A", name: "Internet / Wifi", price: 50000, unit: "tháng/phòng", status: "active", description: "Internet gói 150Mbps" },
-    { id: "s4", hostelId: "A", name: "Dịch vụ vệ sinh & Rác", price: 30000, unit: "tháng/phòng", status: "active", description: "Thu gom rác và dọn dẹp" },
+    { id: "s1", hostelId: "A", name: "Điện sinh hoạt", price: 3000, unit: "kWh", status: "active", description: "Tính theo công tơ điện riêng" },
+    { id: "s2", hostelId: "A", name: "Nước sạch", price: 5000, unit: "m³", status: "active", description: "Tính theo khối lượng nước tiêu thụ" },
+    { id: "s3", hostelId: "A", name: "Internet / Wifi", price: 20000, unit: "tháng/phòng", status: "active", description: "Internet gói 150Mbps" },
+    { id: "s4", hostelId: "A", name: "Rác", price: 30000, unit: "tháng/phòng", status: "active", description: "Thu gom rác và dọn dẹp" },
     { id: "s5", hostelId: "B", name: "Điện kinh doanh", price: 4000, unit: "kWh", status: "active", description: "Điện khu dịch vụ cao cấp B" },
     { id: "s6", hostelId: "B", name: "Nước sinh hoạt B", price: 18000, unit: "m³", status: "active", description: "Nước máy thành phố" },
     { id: "s7", hostelId: "B", name: "Cáp quang tốc độ cao", price: 120000, unit: "tháng/phòng", status: "active", description: "Internet gói doanh nghiệp" },
@@ -153,10 +174,10 @@ async function main() {
       tenantName: "Nguyễn Văn Khách Phòng 1-A",
       month: "2026-05",
       roomPrice: 2500000,
-      electricityCost: 45 * 3500,
-      waterCost: 8 * 15000,
+      electricityCost: 45 * 3000,
+      waterCost: 8 * 5000,
       otherServicesCost: 100000 + 50000,
-      total: 2500000 + (45 * 3500) + (8 * 15000) + 150000,
+      total: 2500000 + (45 * 3000) + (8 * 5000) + 150000,
       status: "paid",
       createdAt: new Date("2026-05-30"),
     },
@@ -168,8 +189,8 @@ async function main() {
       tenantName: "Lê Văn Khách Phòng 1-B",
       month: "2026-05",
       roomPrice: 3500000,
-      electricityCost: 80 * 4000,
-      waterCost: 15 * 18000,
+      electricityCost: 80 * 3000,
+      waterCost: 15 * 5000,
       otherServicesCost: 120000 + 150000,
       total: 3500000 + (80 * 4000) + (15 * 18000) + 270000,
       status: "paid",
@@ -177,6 +198,17 @@ async function main() {
     },
   ]);
   console.log("Inserted invoices.");
+
+  // 7. Insert Room Usages (lịch sử điện nước mẫu)
+  await db.insert(roomUsages).values([
+    { id: "ru1", roomId: "a1", month: "2026-04", electricityStart: 100, electricityEnd: 220, waterStart: 10, waterEnd: 18 },
+    { id: "ru2", roomId: "a1", month: "2026-05", electricityStart: 220, electricityEnd: 350, waterStart: 18, waterEnd: 27 },
+    { id: "ru3", roomId: "a1", month: "2026-06", electricityStart: 350, electricityEnd: 490, waterStart: 27, waterEnd: 37 },
+    { id: "ru4", roomId: "b1", month: "2026-04", electricityStart: 200, electricityEnd: 350, waterStart: 15, waterEnd: 28 },
+    { id: "ru5", roomId: "b1", month: "2026-05", electricityStart: 350, electricityEnd: 510, waterStart: 28, waterEnd: 45 },
+    { id: "ru6", roomId: "b1", month: "2026-06", electricityStart: 510, electricityEnd: 680, waterStart: 45, waterEnd: 65 },
+  ]);
+  console.log("Inserted room usages.");
 
   console.log("Seeding finished successfully!");
   process.exit(0);

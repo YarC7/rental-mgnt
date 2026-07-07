@@ -32,7 +32,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { NativeSelect } from "@/components/ui/native-select";
-import { useHostel, Room } from "@/context/HostelContext";
+import { useHostel, Room, RoomUsage } from "@/context/HostelContext";
 import {
   useReactTable,
   getCoreRowModel,
@@ -44,7 +44,7 @@ import {
 import { Html5Qrcode } from "html5-qrcode";
 
 export default function RoomsPage() {
-  const { rooms, tenants, addRoom, editRoom, deleteRoom, addTenant, editTenant, currentHostel } = useHostel();
+  const { rooms, tenants, addRoom, editRoom, deleteRoom, addTenant, editTenant, currentHostel, getRoomUsages, saveRoomUsage } = useHostel();
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
@@ -54,13 +54,27 @@ export default function RoomsPage() {
     setMounted(true);
   }, []);
 
+  // Room Usages State
+  const [usagesList, setUsagesList] = useState<RoomUsage[]>([]);
+  const [historicalTenants, setHistoricalTenants] = useState<any[]>([]);
+  const [selectedTenantFilter, setSelectedTenantFilter] = useState<string>("all");
+  const [isLoadingUsages, setIsLoadingUsages] = useState(false);
+
+  // Record Utility Form State
+  const [recordMonth, setRecordMonth] = useState("");
+  const [recordElecStart, setRecordElecStart] = useState("");
+  const [recordElecEnd, setRecordElecEnd] = useState("");
+  const [recordWaterStart, setRecordWaterStart] = useState("");
+  const [recordWaterEnd, setRecordWaterEnd] = useState("");
+  const [isRecording, setIsRecording] = useState(false);
+  const [isFormOpen, setIsFormOpen] = useState(false);
+
   // Form State
   const [isOpenAdd, setIsOpenAdd] = useState(false);
   const [isOpenEdit, setIsOpenEdit] = useState(false);
   const [isOpenDetail, setIsOpenDetail] = useState(false);
   const [detailRoom, setDetailRoom] = useState<Room | null>(null);
   const [currentRoom, setCurrentRoom] = useState<Room | null>(null);
-
   const [formNumber, setFormNumber] = useState("");
   const [formPrice, setFormPrice] = useState("");
   const [formArea, setFormArea] = useState("");
@@ -200,6 +214,67 @@ export default function RoomsPage() {
       };
     }
   }, [isOpenQRScanner]);
+
+  // Load room usages when detail dialog is opened or filter changes
+  useEffect(() => {
+    if (isOpenDetail && detailRoom) {
+      setIsLoadingUsages(true);
+      getRoomUsages(detailRoom.id, selectedTenantFilter === "all" ? undefined : selectedTenantFilter)
+        .then(setUsagesList)
+        .catch(console.error)
+        .finally(() => setIsLoadingUsages(false));
+    } else {
+      setUsagesList([]);
+    }
+  }, [isOpenDetail, detailRoom, selectedTenantFilter]);
+
+  // Load all historical tenants who ever stayed in this room
+  useEffect(() => {
+    if (isOpenDetail && detailRoom) {
+      fetch("/api/tenants?includeDeleted=true")
+        .then((res) => res.json())
+        .then((data: any[]) => {
+          const matched = data.filter(
+            (t) => t.roomId === detailRoom.id || t.roomNumber === detailRoom.number
+          );
+          setHistoricalTenants(matched);
+        })
+        .catch(console.error);
+    } else {
+      setHistoricalTenants([]);
+      setSelectedTenantFilter("all");
+    }
+  }, [isOpenDetail, detailRoom]);
+
+  const handleSaveUsage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!detailRoom || !recordMonth) return;
+    setIsRecording(true);
+    try {
+      await saveRoomUsage(detailRoom.id, {
+        month: recordMonth,
+        electricityStart: Number(recordElecStart) || 0,
+        electricityEnd: Number(recordElecEnd) || 0,
+        waterStart: Number(recordWaterStart) || 0,
+        waterEnd: Number(recordWaterEnd) || 0,
+      });
+      // Refresh list
+      const updated = await getRoomUsages(detailRoom.id, selectedTenantFilter === "all" ? undefined : selectedTenantFilter);
+      setUsagesList(updated);
+      // Reset form fields
+      setRecordMonth("");
+      setRecordElecStart("");
+      setRecordElecEnd("");
+      setRecordWaterStart("");
+      setRecordWaterEnd("");
+      setIsFormOpen(false);
+    } catch (err) {
+      console.error(err);
+      alert("Lỗi khi lưu chỉ số điện nước.");
+    } finally {
+      setIsRecording(false);
+    }
+  };
 
   const handleAddTenant = (e: React.FormEvent) => {
     e.preventDefault();
@@ -764,6 +839,151 @@ export default function RoomsPage() {
                   <div className="text-center py-6 text-stone-400 text-xs">
                     <User className="w-6 h-6 mx-auto mb-1" />
                     Chưa có người thuê
+                  </div>
+                )}
+              </div>
+
+              {/* Utility Index History & Logging Section */}
+              <div className="pt-4 border-t border-stone-100 space-y-4">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-semibold text-stone-700 uppercase tracking-wide">Chỉ số điện nước</h4>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="text-[11px] h-7 px-2.5 border-stone-300 text-stone-700"
+                    onClick={() => setIsFormOpen(!isFormOpen)}
+                  >
+                    {isFormOpen ? "Hủy" : "Ghi chỉ số"}
+                  </Button>
+                </div>
+
+                {isFormOpen && (
+                  <div className="p-3 border border-stone-200 bg-stone-50/50 rounded-lg space-y-3">
+                    <h5 className="text-[11px] font-semibold text-stone-700">Ghi chỉ số sử dụng</h5>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1.5 col-span-2">
+                        <Label htmlFor="usage-month" className="text-[11px] text-stone-600 font-medium">Tháng ghi nhận</Label>
+                        <Input
+                          id="usage-month"
+                          type="month"
+                          className="h-8 text-xs bg-white"
+                          value={recordMonth}
+                          onChange={(e) => setRecordMonth(e.target.value)}
+                          required
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="elec-start" className="text-[11px] text-stone-600 font-medium">Điện bắt đầu (kWh)</Label>
+                        <Input
+                          id="elec-start"
+                          type="number"
+                          className="h-8 text-xs bg-white"
+                          placeholder="0"
+                          value={recordElecStart}
+                          onChange={(e) => setRecordElecStart(e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="elec-end" className="text-[11px] text-stone-600 font-medium">Điện kết thúc (kWh)</Label>
+                        <Input
+                          id="elec-end"
+                          type="number"
+                          className="h-8 text-xs bg-white"
+                          placeholder="0"
+                          value={recordElecEnd}
+                          onChange={(e) => setRecordElecEnd(e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="water-start" className="text-[11px] text-stone-600 font-medium">Nước bắt đầu (m³)</Label>
+                        <Input
+                          id="water-start"
+                          type="number"
+                          className="h-8 text-xs bg-white"
+                          placeholder="0"
+                          value={recordWaterStart}
+                          onChange={(e) => setRecordWaterStart(e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="water-end" className="text-[11px] text-stone-600 font-medium">Nước kết thúc (m³)</Label>
+                        <Input
+                          id="water-end"
+                          type="number"
+                          className="h-8 text-xs bg-white"
+                          placeholder="0"
+                          value={recordWaterEnd}
+                          onChange={(e) => setRecordWaterEnd(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                    <Button
+                      type="button"
+                      disabled={isRecording}
+                      onClick={handleSaveUsage}
+                      className="w-full h-8 bg-stone-900 hover:bg-stone-850 text-white text-[11px]"
+                    >
+                      {isRecording ? "Đang lưu..." : "Lưu chỉ số"}
+                    </Button>
+                  </div>
+                )}
+
+                {/* Residency Filtering Dropdown */}
+                {historicalTenants.length > 0 && (
+                  <div className="flex items-center justify-between bg-stone-50 p-2.5 rounded-lg border border-stone-200">
+                    <Label htmlFor="filter-tenant" className="text-[11px] font-medium text-stone-600">Lọc theo khách thuê:</Label>
+                    <NativeSelect
+                      id="filter-tenant"
+                      className="text-[11px] h-7 w-48 py-0.5 bg-white border border-stone-200"
+                      value={selectedTenantFilter}
+                      onChange={(e) => setSelectedTenantFilter(e.target.value)}
+                    >
+                      <option value="all">Tất cả thời gian</option>
+                      {historicalTenants.map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.name} {t.deletedAt ? "(Đã dời đi)" : "(Hiện tại)"}
+                        </option>
+                      ))}
+                    </NativeSelect>
+                  </div>
+                )}
+
+                {/* Usage Log List */}
+                {isLoadingUsages ? (
+                  <div className="flex items-center justify-center py-6 text-stone-400 text-xs gap-1.5">
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" /> Đang tải lịch sử...
+                  </div>
+                ) : usagesList.length > 0 ? (
+                  <div className="border border-stone-200 rounded-lg overflow-hidden divide-y divide-stone-150">
+                    {usagesList.map((usage) => {
+                      const electricityUsed = usage.electricityEnd - usage.electricityStart;
+                      const waterUsed = usage.waterEnd - usage.waterStart;
+                      return (
+                        <div key={usage.id} className="p-3 bg-white text-stone-800 space-y-2 hover:bg-stone-50/50 transition-colors">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-semibold text-stone-900 bg-stone-100 px-2 py-0.5 rounded">Tháng {usage.month}</span>
+                            <span className="text-[10px] text-stone-400">Ghi nhận: {new Date(usage.createdAt).toLocaleDateString("vi-VN")}</span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-4 text-xs">
+                            <div className="space-y-0.5">
+                              <p className="text-[10px] text-stone-500 font-medium">Điện tiêu thụ</p>
+                              <p className="font-semibold text-stone-900">{electricityUsed >= 0 ? `${electricityUsed} kWh` : "Chưa có chỉ số cuối"}</p>
+                              <p className="text-[10px] text-stone-400">Chỉ số: {usage.electricityStart} → {usage.electricityEnd}</p>
+                            </div>
+                            <div className="space-y-0.5">
+                              <p className="text-[10px] text-stone-500 font-medium">Nước tiêu thụ</p>
+                              <p className="font-semibold text-stone-900">{waterUsed >= 0 ? `${waterUsed} m³` : "Chưa có chỉ số cuối"}</p>
+                              <p className="text-[10px] text-stone-400">Chỉ số: {usage.waterStart} → {usage.waterEnd}</p>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-stone-400 text-xs">
+                    Chưa có lịch sử điện nước cho khoảng thời gian này
                   </div>
                 )}
               </div>

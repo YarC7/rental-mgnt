@@ -36,8 +36,8 @@ export default function InvoicesPage() {
   const activeHostelRooms = hostelRooms.filter((r) => r.status === "rented");
 
   // Query service rates dynamically from context services
-  const elecService = services.find((s) => s.hostelId === currentHostel && s.name.includes("Điện")) || { price: 3500 };
-  const waterService = services.find((s) => s.hostelId === currentHostel && s.name.includes("Nước")) || { price: 15000 };
+  const elecService = services.find((s) => s.hostelId === currentHostel && s.name.includes("Điện")) || { price: 3000 };
+  const waterService = services.find((s) => s.hostelId === currentHostel && s.name.includes("Nước")) || { price: 5000 };
   const internetService = services.find((s) => s.hostelId === currentHostel && (s.name.includes("Internet") || s.name.includes("Cáp quang"))) || { price: 100000 };
   const cleaningService = services.find((s) => s.hostelId === currentHostel && (s.name.includes("vệ sinh") || s.name.includes("Vệ sinh"))) || { price: 50000 };
 

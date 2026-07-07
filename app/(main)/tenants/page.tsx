@@ -78,6 +78,7 @@ export default function TenantsPage() {
       roomNumber: formRoom,
       startDate: formStartDate || new Date().toISOString().split("T")[0],
       deposit: Number(formDeposit) || 0,
+      isPrimary: false,
     });
 
     resetForm();

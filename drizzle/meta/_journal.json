@@ -29,6 +29,13 @@
       "when": 1783422902360,
       "tag": "0003_add_payment_table",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1783424543210,
+      "tag": "0004_add_room_usages_and_soft_delete",
+      "breakpoints": true
     }
   ]
 }

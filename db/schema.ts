@@ -39,6 +39,7 @@ export const roomsRelations = relations(rooms, ({ one, many }) => ({
   }),
   tenants: many(tenants),
   invoices: many(invoices),
+  usages: many(roomUsages),
 }));
 
 // ==========================================
@@ -60,6 +61,7 @@ export const tenants = pgTable("tenants", {
   startDate: timestamp("start_date").notNull(),
   isPrimary: boolean("is_primary").notNull().default(false),
   deposit: integer("deposit").notNull().default(0),
+  deletedAt: timestamp("deleted_at"),
 }, (table) => [
   index("tenants_hostel_id_idx").on(table.hostelId),
   index("tenants_room_id_idx").on(table.roomId),
@@ -150,5 +152,28 @@ export const paymentsRelations = relations(payments, ({ one }) => ({
   invoice: one(invoices, {
     fields: [payments.invoiceId],
     references: [invoices.id],
+  }),
+}));
+
+// ==========================================
+// 7. Room Usages Table
+// ==========================================
+export const roomUsages = pgTable("room_usages", {
+  id: text("id").primaryKey(),
+  roomId: text("room_id").notNull().references(() => rooms.id, { onDelete: "cascade" }),
+  month: text("month").notNull(), // e.g. "2026-07"
+  electricityStart: integer("electricity_start").notNull().default(0),
+  electricityEnd: integer("electricity_end").notNull().default(0),
+  waterStart: integer("water_start").notNull().default(0),
+  waterEnd: integer("water_end").notNull().default(0),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("room_usages_room_id_idx").on(table.roomId),
+]);
+
+export const roomUsagesRelations = relations(roomUsages, ({ one }) => ({
+  room: one(rooms, {
+    fields: [roomUsages.roomId],
+    references: [rooms.id],
   }),
 }));
