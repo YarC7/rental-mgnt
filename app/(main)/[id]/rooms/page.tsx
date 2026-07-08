@@ -74,6 +74,15 @@ export default function RoomsPage() {
   const [isTenantsOpen, setIsTenantsOpen] = useState(true);
   const [isUtilitiesOpen, setIsUtilitiesOpen] = useState(true);
 
+  // Responsive Layout check
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 640);
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
+
   // Form State
   const [isOpenAdd, setIsOpenAdd] = useState(false);
   const [isOpenEdit, setIsOpenEdit] = useState(false);
@@ -721,7 +730,14 @@ export default function RoomsPage() {
 
       {/* Room Detail Drawer/Sidebar */}
       <Sheet open={isOpenDetail} onOpenChange={(open) => { setIsOpenDetail(open); if (!open) { setDetailRoom(null); resetForm(); } }}>
-        <SheetContent className="data-[side=right]:sm:max-w-2xl w-full bg-white overflow-y-auto h-full flex flex-col p-6">
+        <SheetContent 
+          side={isMobile ? "bottom" : "right"} 
+          className={`bg-white flex flex-col p-6 transition-all duration-300 ${
+            isMobile 
+              ? "h-[85vh] max-h-[90vh] rounded-t-2xl border-t border-stone-200" 
+              : "data-[side=right]:sm:max-w-2xl w-full h-full"
+          }`}
+        >
           <SheetHeader className="p-0 mb-4">
             <SheetTitle className="text-stone-900 text-base font-semibold flex items-center gap-2">
               Phòng {detailRoom?.number}
@@ -733,7 +749,7 @@ export default function RoomsPage() {
           </SheetHeader>
 
           <form onSubmit={handleDetailSave} className="space-y-5 flex-1 flex flex-col justify-between">
-            <div className="space-y-5 overflow-y-auto pr-1">
+            <div className="space-y-5 overflow-y-auto pr-1 flex-1 min-h-0">
               {/* Room Info Section */}
               <div>
                 <div 
