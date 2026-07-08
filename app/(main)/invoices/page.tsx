@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Plus, Search, ReceiptText, Check, X, ShieldAlert, AlertCircle, Eye } from "lucide-react";
+import { Plus, Search, ReceiptText, Check, X, ShieldAlert, AlertCircle, Eye, Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -25,6 +25,21 @@ export default function InvoicesPage() {
   const { invoices, addInvoice, deleteInvoice, toggleInvoicePaid, rooms, services, currentHostel } = useHostel();
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+
+  // Bank settings states loaded on mount to prevent hydration mismatch
+  const [bankId, setBankId] = useState("VCB");
+  const [accountNo, setAccountNo] = useState("0123456789");
+  const [accountName, setAccountName] = useState("NGUYEN VAN A");
+  const [bankTemplate, setBankTemplate] = useState("compact2");
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      setBankId(localStorage.getItem("bankId") || "VCB");
+      setAccountNo(localStorage.getItem("accountNo") || "0123456789");
+      setAccountName(localStorage.getItem("accountName") || "NGUYEN VAN A");
+      setBankTemplate(localStorage.getItem("bankTemplate") || "compact2");
+    }
+  }, []);
 
   // Dialog State
   const [isOpenAdd, setIsOpenAdd] = useState(false);
@@ -101,6 +116,173 @@ export default function InvoicesPage() {
     if (confirm("Xóa hóa đơn này khỏi hệ thống?")) {
       deleteInvoice(id);
     }
+  };
+
+  const getVietQRUrl = (invoice: Invoice) => {
+    const amount = invoice.total;
+    const addInfo = encodeURIComponent(`Thanh toan phong ${invoice.roomNumber} thang ${invoice.month}`);
+    const name = encodeURIComponent(accountName);
+    
+    return `https://img.vietqr.io/image/${bankId}-${accountNo}-${bankTemplate}.png?amount=${amount}&addInfo=${addInfo}&accountName=${name}`;
+  };
+
+  const handlePrint = async (invoice: Invoice) => {
+    // Tìm phòng và lấy chỉ số điện nước thực tế
+    const room = rooms.find((r) => r.number === invoice.roomNumber && r.hostelId === currentHostel);
+    let usage: any = null;
+    if (room) {
+      try {
+        const res = await fetch(`/api/rooms/${room.id}/usages`);
+        if (res.ok) {
+          const usages = await res.json();
+          usage = usages.find((u: any) => u.month === invoice.month);
+        }
+      } catch (e) {
+        console.error("Failed to fetch usage details", e);
+      }
+    }
+
+    const qrUrl = getVietQRUrl(invoice);
+
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) {
+      alert("Vui lòng cho phép mở cửa sổ bật lên để in hóa đơn.");
+      return;
+    }
+
+    const htmlContent = `
+      <html>
+        <head>
+          <title>Hóa đơn phòng ${invoice.roomNumber}</title>
+          <style>
+            body { font-family: system-ui, -apple-system, sans-serif; padding: 40px; color: #1c1917; line-height: 1.5; }
+            .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #e7e5e4; padding-bottom: 20px; }
+            .title { font-size: 22px; font-weight: 800; margin: 0; text-transform: uppercase; letter-spacing: 0.5px; }
+            .subtitle { font-size: 13px; color: #78716c; margin-top: 6px; font-weight: 500; }
+            .info-grid { display: flex; flex-wrap: wrap; margin-bottom: 20px; font-size: 13px; }
+            .info-item { width: 50%; display: flex; flex-direction: column; margin-bottom: 12px; box-sizing: border-box; }
+            .info-item span { color: #78716c; font-size: 11px; text-transform: uppercase; font-weight: 600; margin-bottom: 2px; }
+            .info-item strong { font-size: 14px; color: #1c1917; }
+            .table { width: 100%; border-collapse: collapse; margin-bottom: 24px; font-size: 13px; }
+            .table th, .table td { padding: 12px 10px; border-bottom: 1px solid #e7e5e4; text-align: left; }
+            .table th { background: #f5f5f4; font-weight: 600; color: #444; text-transform: uppercase; font-size: 11px; }
+            .total-row { font-size: 15px; font-weight: 700; background: #fafaf9; }
+            .qr-container { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; margin-bottom: 30px; border: 1px solid #e7e5e4; padding: 16px; border-radius: 12px; background: #fafaf9; }
+            .qr-info { font-size: 13px; max-width: 60%; }
+            .qr-info p { margin: 0 0 4px 0; }
+            .qr-image { text-align: right; }
+            .signature-section { display: flex; justify-content: space-between; margin-top: 40px; font-size: 13px; }
+            .signature-box { text-align: center; width: 45%; }
+            .signature-space { height: 70px; }
+            @media print {
+              body { padding: 20px; }
+              .no-print { display: none; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div class="title">Hóa đơn thanh toán</div>
+            <div class="subtitle">Nhà trọ ${currentHostel}</div>
+          </div>
+          
+          <div class="info-grid">
+            <div class="info-item">
+              <span>Mã hóa đơn</span>
+              <strong>#HD-${invoice.id}</strong>
+            </div>
+            <div class="info-item">
+              <span>Kỳ thanh toán</span>
+              <strong>Tháng ${invoice.month}</strong>
+            </div>
+            <div class="info-item">
+              <span>Phòng</span>
+              <strong>Phòng ${invoice.roomNumber}</strong>
+            </div>
+            <div class="info-item">
+              <span>Khách thuê</span>
+              <strong>${invoice.tenantName}</strong>
+            </div>
+          </div>
+
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Khoản mục</th>
+                <th style="text-align: right;">Thành tiền</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Tiền phòng cơ bản</td>
+                <td style="text-align: right;">${formatPrice(invoice.roomPrice)}</td>
+              </tr>
+              <tr>
+                <td>
+                  Tiền điện tiêu thụ
+                  ${usage ? `<br/><span style="font-size: 11px; color: #78716c;">Tiêu thụ: ${usage.electricityEnd - usage.electricityStart} kWh (Số cũ: ${usage.electricityStart} &rarr; Số mới: ${usage.electricityEnd})</span>` : ""}
+                </td>
+                <td style="text-align: right; vertical-align: top;">${formatPrice(invoice.electricityCost)}</td>
+              </tr>
+              <tr>
+                <td>
+                  Tiền nước tiêu thụ
+                  ${usage ? `<br/><span style="font-size: 11px; color: #78716c;">Tiêu thụ: ${usage.waterEnd - usage.waterStart} m³ (Số cũ: ${usage.waterStart} &rarr; Số mới: ${usage.waterEnd})</span>` : ""}
+                </td>
+                <td style="text-align: right; vertical-align: top;">${formatPrice(invoice.waterCost)}</td>
+              </tr>
+              <tr>
+                <td>Chi phí dịch vụ khác (Internet, Vệ sinh...)</td>
+                <td style="text-align: right; vertical-align: top;">${formatPrice(invoice.otherServicesCost)}</td>
+              </tr>
+              <tr class="total-row">
+                <td>TỔNG CỘNG</td>
+                <td style="text-align: right; color: #000; vertical-align: middle;">${formatPrice(invoice.total)}</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <!-- VietQR Section -->
+          <div class="qr-container">
+            <div class="qr-info">
+              <p style="margin: 0 0 6px 0; font-weight: bold; text-transform: uppercase; font-size: 11px; color: #78716c;">Thông tin thanh toán chuyển khoản</p>
+              <p>Ngân hàng: <strong>${bankId}</strong></p>
+              <p>Số tài khoản: <strong>${accountNo}</strong></p>
+              <p>Chủ tài khoản: <strong>${accountName}</strong></p>
+              <p style="margin-top: 6px; font-size: 12px; color: #6b7280; font-style: italic;">
+                Nội dung CK: <strong style="color: #111827; font-style: normal;">Thanh toan phong ${invoice.roomNumber} thang ${invoice.month}</strong>
+              </p>
+            </div>
+            <div class="qr-image">
+              <img src="${qrUrl}" alt="Mã VietQR Thanh toán" style="width: 130px; height: 130px; object-fit: contain;" />
+            </div>
+          </div>
+
+          <div class="signature-section">
+            <div class="signature-box">
+              <p>Khách thuê ký tên</p>
+              <div class="signature-space"></div>
+              <div style="border-top: 1px dotted #a8a29e; width: 140px; margin: 0 auto;"></div>
+            </div>
+            <div class="signature-box">
+              <p>Chủ trọ ký tên</p>
+              <div class="signature-space"></div>
+              <div style="border-top: 1px dotted #a8a29e; width: 140px; margin: 0 auto;"></div>
+            </div>
+          </div>
+
+          <script>
+            window.onload = function() {
+              window.print();
+              setTimeout(function() { window.close(); }, 500);
+            };
+          </script>
+        </body>
+      </html>
+    `;
+
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
   };
 
   const openDetail = (invoice: Invoice) => {
@@ -337,14 +519,25 @@ export default function InvoicesPage() {
                         size="icon"
                         className="h-8 w-8 text-stone-500 hover:text-stone-950"
                         onClick={() => openDetail(inv)}
+                        title="Xem chi tiết"
                       >
                         <Eye className="w-3.5 h-3.5" />
                       </Button>
                       <Button
                         variant="ghost"
                         size="icon"
+                        className="h-8 w-8 text-stone-500 hover:text-stone-950"
+                        onClick={() => handlePrint(inv)}
+                        title="In hóa đơn"
+                      >
+                        <Printer className="w-3.5 h-3.5" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
                         className="h-8 w-8 text-stone-500 hover:text-rose-600"
                         onClick={() => handleDeleteInvoice(inv.id)}
+                        title="Xóa hóa đơn"
                       >
                         <X className="w-3.5 h-3.5" />
                       </Button>
@@ -425,15 +618,38 @@ export default function InvoicesPage() {
 
               {/* Warning/Alert for unpaid invoice */}
               {selectedInvoice.status === "unpaid" && (
-                <div className="p-3 bg-amber-50 rounded-lg border border-amber-100 flex items-start gap-2.5 text-[11px] text-amber-800">
-                  <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                  <p>Hóa đơn này chưa đóng tiền phòng. Bạn có thể nhấn trực tiếp vào trạng thái ở danh sách bên ngoài để chuyển thành đã thanh toán sau khi nhận được tiền mặt hoặc chuyển khoản.</p>
-                </div>
+                <>
+                  <div className="p-3 bg-amber-50 rounded-lg border border-amber-100 flex items-start gap-2.5 text-[11px] text-amber-800">
+                    <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                    <p>Hóa đơn này chưa đóng tiền phòng. Bạn có thể nhấn trực tiếp vào trạng thái ở danh sách bên ngoài để chuyển thành đã thanh toán sau khi nhận được tiền mặt hoặc chuyển khoản.</p>
+                  </div>
+                  
+                  {/* VietQR payment image in UI if unpaid */}
+                  <div className="flex flex-col items-center justify-center p-3.5 border border-stone-200 rounded-lg bg-stone-50/50 space-y-2">
+                    <span className="text-[10px] text-stone-500 font-bold uppercase tracking-wider">Mã QR Thanh toán (Chuyển khoản nhanh)</span>
+                    <img
+                      src={getVietQRUrl(selectedInvoice)}
+                      alt="VietQR Payment"
+                      className="w-44 h-44 object-contain rounded-md bg-white border p-1 shadow-sm"
+                    />
+                    <p className="text-[10px] text-stone-550 text-center font-medium">
+                      Quét mã để chuyển nhanh <span className="font-bold text-stone-900">{formatPrice(selectedInvoice.total)}</span>
+                    </p>
+                  </div>
+                </>
               )}
             </div>
           )}
-          <DialogFooter className="pt-2">
-            <Button className="w-full 2xl:max-w-6xl bg-stone-900 hover:bg-stone-800 text-white text-xs" onClick={() => setIsOpenDetail(false)}>Đóng lại</Button>
+          <DialogFooter className="pt-2 flex gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              className="flex-1 text-xs border-stone-300 text-stone-700 hover:bg-stone-50"
+              onClick={() => selectedInvoice && handlePrint(selectedInvoice)}
+            >
+              <Printer className="w-3.5 h-3.5 mr-1.5" /> In hóa đơn
+            </Button>
+            <Button className="flex-1 bg-stone-900 hover:bg-stone-800 text-white text-xs" onClick={() => setIsOpenDetail(false)}>Đóng lại</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

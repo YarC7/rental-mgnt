@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Plus, Search, User, Edit2, Trash2, ShieldAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
 import {
   Dialog,
   DialogContent,
@@ -128,14 +128,60 @@ export default function TenantsPage() {
 
   const hostelTenants = tenants.filter((t) => t.hostelId === currentHostel);
 
-  const filteredTenants = hostelTenants.filter((tenant) => {
-    const term = searchTerm.toLowerCase();
-    return (
-      tenant.name.toLowerCase().includes(term) ||
-      tenant.phone.includes(term) ||
-      tenant.roomNumber.includes(term)
-    );
-  });
+  const filteredTenants = useMemo(() => {
+    return hostelTenants.filter((tenant) => {
+      const term = searchTerm.toLowerCase();
+      const room = rooms.find((r) => r.id === tenant.roomId);
+      const roomNum = room ? room.number : "";
+      return (
+        tenant.name.toLowerCase().includes(term) ||
+        tenant.phone.includes(term) ||
+        roomNum.toLowerCase().includes(term)
+      );
+    });
+  }, [hostelTenants, rooms, searchTerm]);
+
+  // Group filtered tenants by room
+  const groupedRooms = useMemo(() => {
+    const hostelRooms = rooms.filter((r) => r.hostelId === currentHostel);
+    const groups: {
+      room: typeof rooms[0] | null;
+      primaryTenant: Tenant | null;
+      roommates: Tenant[];
+    }[] = [];
+
+    hostelRooms.forEach((room) => {
+      const roomTenants = filteredTenants.filter((t) => t.roomId === room.id);
+      if (roomTenants.length > 0) {
+        const primary = roomTenants.find((t) => t.isPrimary) || roomTenants[0];
+        const roommates = roomTenants.filter((t) => t.id !== primary.id);
+        groups.push({
+          room,
+          primaryTenant: primary,
+          roommates,
+        });
+      }
+    });
+
+    const unassignedTenants = filteredTenants.filter((t) => !t.roomId);
+    if (unassignedTenants.length > 0) {
+      unassignedTenants.forEach((tenant) => {
+        groups.push({
+          room: null,
+          primaryTenant: tenant,
+          roommates: [],
+        });
+      });
+    }
+
+    groups.sort((a, b) => {
+      if (!a.room) return 1;
+      if (!b.room) return -1;
+      return a.room.number.localeCompare(b.room.number, undefined, { numeric: true });
+    });
+
+    return groups;
+  }, [filteredTenants, rooms, currentHostel]);
 
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(price);
@@ -230,80 +276,157 @@ export default function TenantsPage() {
         </div>
       </div>
 
-      {/* List Tenants in Table */}
-      <div className="bg-white rounded-xl border border-stone-200 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <Table>
-            <TableHeader className="bg-stone-50">
-              <TableRow>
-                <TableHead className="text-stone-700 text-xs font-semibold py-3.5 pl-6">Khách thuê</TableHead>
-                <TableHead className="text-stone-700 text-xs font-semibold py-3.5">Năm sinh</TableHead>
-                <TableHead className="text-stone-700 text-xs font-semibold py-3.5">Phòng</TableHead>
-                <TableHead className="text-stone-700 text-xs font-semibold py-3.5">Số CCCD</TableHead>
-                <TableHead className="text-stone-700 text-xs font-semibold py-3.5">Địa chỉ thường trú</TableHead>
-                <TableHead className="text-stone-700 text-xs font-semibold py-3.5">Ngày nhận phòng</TableHead>
-                <TableHead className="text-stone-700 text-xs font-semibold py-3.5">Tiền đặt cọc</TableHead>
-                <TableHead className="text-stone-700 text-xs font-semibold py-3.5 text-right pr-6">Hành động</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredTenants.length > 0 ? (
-                filteredTenants.map((tenant) => (
-                  <TableRow key={tenant.id} className="hover:bg-stone-50/50">
-                    <TableCell className="py-4 pl-6">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-stone-100 flex items-center justify-center text-stone-600">
-                          <User className="w-4 h-4" />
+      {/* List Tenants in Accordion */}
+      <div className="space-y-4">
+        {groupedRooms.length > 0 ? (
+          <Accordion type="multiple" className="w-full space-y-3">
+            {groupedRooms.map((group) => {
+              const roomId = group.room ? group.room.id : "unassigned";
+              const roomNumber = group.room ? group.room.number : "Chưa phân phòng";
+              const primary = group.primaryTenant;
+              
+              if (!primary) return null;
+
+              return (
+                <AccordionItem
+                  key={roomId === "unassigned" ? `unassigned-${primary.id}` : roomId}
+                  value={roomId === "unassigned" ? `unassigned-${primary.id}` : roomId}
+                  className="bg-white border border-stone-200 rounded-xl overflow-hidden shadow-sm"
+                >
+                  <div className="flex items-center justify-between hover:bg-stone-50/50 transition-colors pr-6">
+                    <AccordionTrigger className="flex-1 px-6 py-4 hover:no-underline border-0 bg-transparent">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between w-full pr-4 text-left gap-4">
+                        {/* Left: Room Badge & Primary Tenant Name */}
+                        <div className="flex items-center gap-4">
+                          <span className="inline-flex items-center justify-center h-8 px-3 rounded-lg text-xs font-bold bg-stone-900 text-white min-w-[90px]">
+                            {group.room ? `Phòng ${roomNumber}` : "Chưa phòng"}
+                          </span>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-semibold text-stone-900 text-xs">{primary.name}</span>
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+                                Chủ phòng
+                              </span>
+                            </div>
+                            <p className="text-[10px] text-stone-500">{primary.phone}</p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="font-semibold text-stone-900 text-xs">{tenant.name}</p>
-                          <p className="text-[10px] text-stone-500">{tenant.phone}</p>
+
+                        {/* Middle: CCCD & Basic info snapshot */}
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-1 text-xs text-stone-600">
+                          <div>
+                            <span className="text-[9px] text-stone-400 block font-medium uppercase">CCCD</span>
+                            <span className="font-mono text-stone-800 text-[11px]">{primary.identityCard}</span>
+                          </div>
+                          <div>
+                            <span className="text-[9px] text-stone-400 block font-medium uppercase">Ngày nhận</span>
+                            <span className="text-stone-800 text-[11px]">{new Date(primary.startDate).toLocaleDateString("vi-VN")}</span>
+                          </div>
+                          <div className="col-span-2 sm:col-span-1">
+                            <span className="text-[9px] text-stone-400 block font-medium uppercase">Tiền cọc</span>
+                            <span className="font-semibold text-stone-900 text-[11px]">{formatPrice(primary.deposit)}</span>
+                          </div>
                         </div>
                       </div>
-                    </TableCell>
-                    <TableCell className="py-4 text-xs text-stone-600">{tenant.birthYear}</TableCell>
-                    <TableCell className="py-4">
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-stone-100 text-stone-800">
-                        P. {tenant.roomNumber}
-                      </span>
-                    </TableCell>
-                    <TableCell className="py-4 text-xs text-stone-500 font-mono">{tenant.identityCard}</TableCell>
-                    <TableCell className="py-4 text-xs text-stone-600 italic max-w-xs truncate" title={tenant.permanentAddress}>
-                      {tenant.permanentAddress}
-                    </TableCell>
-                    <TableCell className="py-4 text-xs text-stone-600">{tenant.startDate}</TableCell>
-                    <TableCell className="py-4 text-xs font-semibold text-stone-900">{formatPrice(tenant.deposit)}</TableCell>
-                    <TableCell className="py-4 text-right pr-6 space-x-1">
+                    </AccordionTrigger>
+
+                    {/* Right: Actions (placed OUTSIDE the button trigger to avoid invalid HTML nesting) */}
+                    <div className="flex items-center gap-1 shrink-0 relative z-10">
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-8 w-8 text-stone-500 hover:text-stone-950"
-                        onClick={() => openEditDialog(tenant)}
+                        className="h-8 w-8 text-stone-500 hover:text-stone-950 rounded-lg"
+                        onClick={() => openEditDialog(primary)}
                       >
                         <Edit2 className="w-3.5 h-3.5" />
                       </Button>
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-8 w-8 text-stone-500 hover:text-rose-600"
-                        onClick={() => handleDelete(tenant.id)}
+                        className="h-8 w-8 text-stone-500 hover:text-rose-600 rounded-lg"
+                        onClick={() => handleDelete(primary.id)}
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </Button>
-                    </TableCell>
-                  </TableRow>
-                ))
-              ) : (
-                <TableRow>
-                  <TableCell colSpan={8} className="text-center py-12 space-y-2">
-                    <ShieldAlert className="w-6 h-6 mx-auto text-stone-400" />
-                    <p className="text-stone-500 text-xs">Không có thông tin khách thuê phù hợp.</p>
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </div>
+                    </div>
+                  </div>
+
+                  <AccordionContent className="px-6 border-t border-stone-100 bg-stone-50/30">
+                    <div className="py-4 space-y-4">
+                      {/* Detailed info of Primary tenant */}
+                      <div className="bg-white p-4 rounded-lg border border-stone-200 grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
+                        <div>
+                          <span className="text-stone-400 font-medium block text-[10px]">Năm sinh</span>
+                          <span className="text-stone-900 font-semibold">{primary.birthYear}</span>
+                        </div>
+                        <div>
+                          <span className="text-stone-400 font-medium block text-[10px]">Email</span>
+                          <span className="text-stone-900">{primary.email || "—"}</span>
+                        </div>
+                        <div className="col-span-2">
+                          <span className="text-stone-400 font-medium block text-[10px]">Địa chỉ thường trú</span>
+                          <span className="text-stone-900">{primary.permanentAddress}</span>
+                        </div>
+                      </div>
+
+                      {/* Roommates section */}
+                      <div className="space-y-2.5">
+                        <h4 className="text-[10px] font-bold text-stone-600 uppercase tracking-wider">
+                          Thành viên ở ghép ({group.roommates.length})
+                        </h4>
+
+                        {group.roommates.length > 0 ? (
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            {group.roommates.map((mate) => (
+                              <div key={mate.id} className="bg-white p-4 rounded-lg border border-stone-200 flex justify-between items-center shadow-xs">
+                                <div className="space-y-1">
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-semibold text-stone-900 text-xs">{mate.name}</span>
+                                    <span className="text-[10px] text-stone-500">({mate.birthYear})</span>
+                                  </div>
+                                  <div className="text-[11px] text-stone-500 space-y-0.5">
+                                    <p>SĐT: <span className="text-stone-700 font-medium">{mate.phone}</span></p>
+                                    <p>CCCD: <span className="text-stone-700 font-mono">{mate.identityCard}</span></p>
+                                    <p className="truncate max-w-xs" title={mate.permanentAddress}>Địa chỉ: <span className="text-stone-700 italic">{mate.permanentAddress}</span></p>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8 text-stone-400 hover:text-stone-900 rounded-lg"
+                                    onClick={() => openEditDialog(mate)}
+                                  >
+                                    <Edit2 className="w-3.5 h-3.5" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8 text-stone-400 hover:text-rose-600 rounded-lg"
+                                    onClick={() => handleDelete(mate.id)}
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </Button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-xs text-stone-400 italic">Không có thành viên ở ghép</p>
+                        )}
+                      </div>
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+              );
+            })}
+          </Accordion>
+        ) : (
+          <div className="bg-white rounded-xl border border-stone-200 shadow-sm py-12 text-center space-y-2">
+            <ShieldAlert className="w-6 h-6 mx-auto text-stone-400" />
+            <p className="text-stone-500 text-xs">Không có thông tin khách thuê phù hợp.</p>
+          </div>
+        )}
       </div>
 
       {/* Edit Tenant Dialog */}

@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { Settings, Save, Sparkles, Check, HelpCircle, Plus, Trash2, Edit2 } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Settings, Save, Sparkles, Check, HelpCircle, Plus, Trash2, Edit2, QrCode } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -22,6 +22,31 @@ import {
 
 export default function SettingsPage() {
   const { services, editService, addService, deleteService, toggleServiceStatus, currentHostel } = useHostel();
+  
+  // Bank configuration states
+  const [bankId, setBankId] = useState("VCB");
+  const [accountNo, setAccountNo] = useState("0123456789");
+  const [accountName, setAccountName] = useState("NGUYEN VAN A");
+  const [bankTemplate, setBankTemplate] = useState("compact2");
+  const [isSavedBank, setIsSavedBank] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      setBankId(localStorage.getItem("bankId") || "VCB");
+      setAccountNo(localStorage.getItem("accountNo") || "0123456789");
+      setAccountName(localStorage.getItem("accountName") || "NGUYEN VAN A");
+      setBankTemplate(localStorage.getItem("bankTemplate") || "compact2");
+    }
+  }, []);
+
+  const handleSaveBank = () => {
+    localStorage.setItem("bankId", bankId);
+    localStorage.setItem("accountNo", accountNo);
+    localStorage.setItem("accountName", accountName);
+    localStorage.setItem("bankTemplate", bankTemplate);
+    setIsSavedBank(true);
+    setTimeout(() => setIsSavedBank(false), 2000);
+  };
 
   // Find electricity and water services dynamically
   const elecService = services.find((s) => s.hostelId === currentHostel && s.name.includes("Điện"));
@@ -270,6 +295,77 @@ export default function SettingsPage() {
               ))}
             </TableBody>
           </Table>
+        </CardContent>
+      </Card>
+
+      {/* VietQR Bank Account Settings */}
+      <Card className="bg-white border-stone-200 shadow-sm overflow-hidden mt-6">
+        <CardHeader className="border-b border-stone-100 bg-stone-50/50 pb-4">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 rounded-lg bg-stone-100 text-stone-700">
+              <QrCode className="w-4 h-4" />
+            </div>
+            <div>
+              <CardTitle className="text-sm font-semibold text-stone-900">Cấu hình Tài khoản nhận thanh toán (VietQR)</CardTitle>
+              <CardDescription className="text-[11px] text-stone-500">Thiết lập thông tin tài khoản ngân hàng để tự động tạo mã QR chuyển khoản khi in hóa đơn.</CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="p-6 space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="bankId" className="text-xs text-stone-700 font-semibold">Ngân hàng (Mã định danh)</Label>
+              <Input
+                id="bankId"
+                placeholder="Ví dụ: VCB, MB, TCB..."
+                value={bankId}
+                onChange={(e) => setBankId(e.target.value.toUpperCase())}
+                className="text-xs font-semibold text-stone-800"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="accountNo" className="text-xs text-stone-700 font-semibold">Số tài khoản</Label>
+              <Input
+                id="accountNo"
+                placeholder="Nhập số tài khoản..."
+                value={accountNo}
+                onChange={(e) => setAccountNo(e.target.value)}
+                className="text-xs text-stone-800 font-mono"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="accountName" className="text-xs text-stone-700 font-semibold">Tên chủ tài khoản</Label>
+              <Input
+                id="accountName"
+                placeholder="Ví dụ: NGUYEN VAN A"
+                value={accountName}
+                onChange={(e) => setAccountName(e.target.value.toUpperCase())}
+                className="text-xs text-stone-800 font-semibold"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="bankTemplate" className="text-xs text-stone-700 font-semibold">Kiểu hiển thị QR</Label>
+              <NativeSelect
+                id="bankTemplate"
+                value={bankTemplate}
+                onChange={(e) => setBankTemplate(e.target.value)}
+                className="text-xs"
+              >
+                <option value="compact2">Compact 2 (Đầy đủ kèm Logo ngân hàng - Khuyên dùng)</option>
+                <option value="compact">Compact (Tối giản kèm Logo)</option>
+                <option value="qr_only">QR Only (Chỉ có hình QR)</option>
+              </NativeSelect>
+            </div>
+          </div>
+          <div className="flex justify-end pt-2 border-t border-stone-100">
+            <Button
+              onClick={handleSaveBank}
+              className="bg-stone-900 hover:bg-stone-800 text-white text-xs px-5 flex gap-1.5 cursor-pointer rounded-lg"
+            >
+              {isSavedBank ? <Check className="w-4 h-4 text-emerald-400" /> : <Save className="w-4 h-4" />}
+              {isSavedBank ? "Đã lưu thành công" : "Lưu cấu hình tài khoản"}
+            </Button>
+          </div>
         </CardContent>
       </Card>
     </div>
