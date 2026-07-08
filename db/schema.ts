@@ -1,5 +1,5 @@
 import { pgTable, text, integer, timestamp, uniqueIndex, index, boolean } from "drizzle-orm/pg-core";
-import { relations } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 
 // ==========================================
 // 1. Hostels Table
@@ -29,7 +29,9 @@ export const rooms = pgTable("rooms", {
   status: text("status").$type<"empty" | "rented" | "maintenance">().notNull().default("empty"),
   description: text("description").notNull().default(""),
 }, (table) => [
-  index("rooms_hostel_id_idx").on(table.hostelId), // Thêm index để truy vấn phòng theo khu trọ nhanh hơn
+  index("rooms_hostel_id_idx").on(table.hostelId),
+  // Chặn trùng số phòng trong cùng 1 dãy trọ
+  uniqueIndex("rooms_hostel_number_unique").on(table.hostelId, table.number),
 ]);
 
 export const roomsRelations = relations(rooms, ({ one, many }) => ({
@@ -65,6 +67,10 @@ export const tenants = pgTable("tenants", {
 }, (table) => [
   index("tenants_hostel_id_idx").on(table.hostelId),
   index("tenants_room_id_idx").on(table.roomId),
+  // Mỗi phòng chỉ được có tối đa 1 chủ phòng (primary tenant) đang hoạt động
+  uniqueIndex("tenants_room_primary_unique")
+    .on(table.roomId, table.isPrimary)
+    .where(sql`${table.deletedAt} IS NULL AND ${table.isPrimary} = true`),
 ]);
 
 export const tenantsRelations = relations(tenants, ({ one }) => ({
@@ -105,10 +111,11 @@ export const servicesRelations = relations(services, ({ one }) => ({
 // ==========================================
 export const invoices = pgTable("invoices", {
   id: text("id").primaryKey(),
-  hostelId: text("hostel_id").notNull().references(() => hostels.id, { onDelete: "cascade" }),
+  // Đổi cascade -> restrict: chặn xóa hostel nếu còn hóa đơn, tránh mất lịch sử tài chính do thao tác nhầm
+  hostelId: text("hostel_id").notNull().references(() => hostels.id, { onDelete: "restrict" }),
   roomId: text("room_id").references(() => rooms.id, { onDelete: "set null" }), // Giữ hóa đơn kể cả khi phòng bị xóa
-  roomNumber: text("room_number").notNull(), // Tốt! Lưu snapshot đề phòng đổi số phòng
-  tenantName: text("tenant_name").notNull(), // Tốt! Lưu snapshot đề phòng khách chuyển đi
+  roomNumber: text("room_number").notNull(), // Snapshot đề phòng đổi số phòng
+  tenantName: text("tenant_name").notNull(), // Snapshot đề phòng khách chuyển đi
   month: text("month").notNull(), // e.g. "2026-06"
   roomPrice: integer("room_price").notNull(),
   electricityCost: integer("electricity_cost").notNull().default(0),
@@ -116,13 +123,15 @@ export const invoices = pgTable("invoices", {
   otherServicesCost: integer("other_services_cost").notNull().default(0),
   total: integer("total").notNull(),
   status: text("status").$type<"unpaid" | "partial" | "paid">().notNull().default("unpaid"),
-  createdAt: timestamp("created_at").defaultNow().notNull(), // Tối ưu: Thống nhất kiểu dữ liệu timestamp
+  createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (table) => [
   index("invoices_hostel_id_idx").on(table.hostelId),
   index("invoices_room_id_idx").on(table.roomId),
+  // Chặn tạo 2 hóa đơn cho cùng 1 phòng trong cùng 1 tháng (double-submit, mất mạng bấm lại...)
+  uniqueIndex("invoices_room_month_unique").on(table.roomId, table.month),
 ]);
 
-export const invoicesRelations = relations(invoices, ({ one }) => ({
+export const invoicesRelations = relations(invoices, ({ one, many }) => ({
   hostel: one(hostels, {
     fields: [invoices.hostelId],
     references: [hostels.id],
@@ -131,8 +140,8 @@ export const invoicesRelations = relations(invoices, ({ one }) => ({
     fields: [invoices.roomId],
     references: [rooms.id],
   }),
+  payments: many(payments),
 }));
-
 
 // ==========================================
 // 6. Payments Table
@@ -169,6 +178,8 @@ export const roomUsages = pgTable("room_usages", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (table) => [
   index("room_usages_room_id_idx").on(table.roomId),
+  // Chặn ghi trùng chỉ số điện nước cho cùng 1 phòng trong cùng 1 tháng
+  uniqueIndex("room_usages_room_month_unique").on(table.roomId, table.month),
 ]);
 
 export const roomUsagesRelations = relations(roomUsages, ({ one }) => ({

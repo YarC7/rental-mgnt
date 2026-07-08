@@ -4,291 +4,290 @@ dotenv.config({ path: ".env.local" });
 import { db } from "./index";
 import { hostels, rooms, tenants, services, invoices, roomUsages } from "./schema";
 
+// ==========================================
+// Seeded RNG (mulberry32) — same seed = same data every run
+// ==========================================
+function mulberry32(seed: number) {
+  return function () {
+    seed |= 0;
+    seed = (seed + 0x6d2b79f5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+const rng = mulberry32(20260708); // fixed seed = ngày viết seed này
+
+function pick<T>(arr: T[]): T {
+  return arr[Math.floor(rng() * arr.length)];
+}
+function randInt(min: number, max: number): number {
+  return Math.floor(rng() * (max - min + 1)) + min;
+}
+function randDate(startISO: string, endISO: string): Date {
+  const start = new Date(startISO).getTime();
+  const end = new Date(endISO).getTime();
+  return new Date(start + rng() * (end - start));
+}
+function toISODate(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
+
+// ==========================================
+// Vietnamese name generator
+// ==========================================
+const FAMILY_NAMES = ["Nguyễn", "Trần", "Lê", "Phạm", "Hoàng", "Huỳnh", "Phan", "Vũ", "Võ", "Đặng", "Bùi", "Đỗ", "Hồ", "Ngô", "Dương", "Lý"];
+const MALE_MIDDLE = ["Văn", "Hữu", "Đức", "Minh", "Quang", "Thành", "Công", "Anh"];
+const FEMALE_MIDDLE = ["Thị", "Ngọc", "Thu", "Kim", "Diệu", "Mai", "Hồng"];
+const MALE_GIVEN = ["Nam", "Hùng", "Tuấn", "Dũng", "Long", "Sơn", "Khánh", "Phong", "Đạt", "Bình", "Kiên", "Hiếu", "Đăng", "Quân", "Vinh"];
+const FEMALE_GIVEN = ["Hoa", "Lan", "Trang", "Linh", "Hương", "Nga", "Thảo", "Vy", "Hạnh", "Chi", "Yến", "Nhung", "Trinh", "My"];
+
+const PROVINCES: Record<string, string> = {
+  "Hà Nội": "001",
+  "Hải Phòng": "031",
+  "Đà Nẵng": "048",
+  "TP Hồ Chí Minh": "079",
+  "Cần Thơ": "092",
+  "Nghệ An": "040",
+  "Thanh Hóa": "038",
+  "Bắc Ninh": "027",
+};
+const ADDRESS_LIST = Object.keys(PROVINCES);
+
+function stripDiacritics(str: string): string {
+  return str
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d")
+    .replace(/Đ/g, "D");
+}
+
+function genPerson(id: string) {
+  const gender: "male" | "female" = rng() < 0.5 ? "male" : "female";
+  const family = pick(FAMILY_NAMES);
+  const middle = gender === "male" ? pick(MALE_MIDDLE) : pick(FEMALE_MIDDLE);
+  const given = gender === "male" ? pick(MALE_GIVEN) : pick(FEMALE_GIVEN);
+  const fullName = `${family} ${middle} ${given}`;
+
+  const birthYear = randInt(1985, 2005);
+  const birthMonth = randInt(1, 12);
+  const birthDay = randInt(1, 28);
+  const dob = `${birthYear}-${String(birthMonth).padStart(2, "0")}-${String(birthDay).padStart(2, "0")}`;
+
+  const address = pick(ADDRESS_LIST);
+  const provinceCode = PROVINCES[address];
+  // CCCD rule: thế kỷ 20 (1900-1999) nam=0 nữ=1; thế kỷ 21 (2000-2099) nam=2 nữ=3
+  const centuryGenderDigit = birthYear < 2000 ? (gender === "male" ? "0" : "1") : gender === "male" ? "2" : "3";
+  const yearSuffix = String(birthYear).slice(2);
+  const sequence = String(randInt(0, 999999)).padStart(6, "0");
+  const identityCard = `${provinceCode}${centuryGenderDigit}${yearSuffix}${sequence}`;
+
+  const mobilePrefixes = ["090", "091", "093", "094", "096", "097", "098", "032", "033", "034", "035", "036", "037", "038", "039", "070", "079", "081", "083", "084"];
+  const phone = `${pick(mobilePrefixes)}${String(randInt(1000000, 9999999)).padStart(7, "0")}`;
+
+  const asciiName = stripDiacritics(fullName).toLowerCase().replace(/\s+/g, ".");
+  const emailDomain = pick(["gmail.com", "yahoo.com", "outlook.com"]);
+  const email = `${asciiName}${randInt(1, 99)}@${emailDomain}`;
+
+  return {
+    id,
+    name: fullName,
+    phone,
+    email,
+    identityCard,
+    dob,
+    gender: gender === "male" ? "Nam" : "Nữ",
+    permanentAddress: address,
+    identityCardIssueDate: toISODate(randDate(`${birthYear + 18}-01-01`, "2024-12-31")),
+    birthYear: String(birthYear),
+  };
+}
+
+// ==========================================
+// Rate lookup — reads directly from services data, never hard-coded
+// ==========================================
+const servicesData: (typeof services.$inferInsert)[] = [
+  { id: "s1", hostelId: "A", name: "Điện sinh hoạt", price: 3000, unit: "kWh", status: "active", description: "Tính theo công tơ điện riêng" },
+  { id: "s2", hostelId: "A", name: "Nước sạch", price: 5000, unit: "m³", status: "active", description: "Tính theo khối lượng nước tiêu thụ" },
+  { id: "s3", hostelId: "A", name: "Internet / Wifi", price: 20000, unit: "tháng/phòng", status: "active", description: "Internet gói 150Mbps" },
+  { id: "s4", hostelId: "A", name: "Rác", price: 30000, unit: "tháng/phòng", status: "active", description: "Thu gom rác và dọn dẹp" },
+  { id: "s5", hostelId: "B", name: "Điện kinh doanh", price: 4000, unit: "kWh", status: "active", description: "Điện khu dịch vụ cao cấp B" },
+  { id: "s6", hostelId: "B", name: "Nước sinh hoạt B", price: 18000, unit: "m³", status: "active", description: "Nước máy thành phố" },
+  { id: "s7", hostelId: "B", name: "Cáp quang tốc độ cao", price: 120000, unit: "tháng/phòng", status: "active", description: "Internet gói doanh nghiệp" },
+  { id: "s8", hostelId: "B", name: "Vệ sinh & Gửi xe máy", price: 150000, unit: "tháng/phòng", status: "active", description: "Dịch vụ giữ xe kèm vệ sinh chung" },
+];
+
+function rateFor(hostelId: string, name: string): number {
+  const svc = servicesData.find((s) => s.hostelId === hostelId && s.name === name);
+  if (!svc) throw new Error(`Không tìm thấy dịch vụ "${name}" cho hostel ${hostelId}`);
+  return svc.price;
+}
+
+const RATE_NAMES = {
+  A: { electricity: "Điện sinh hoạt", water: "Nước sạch", fixedA: "Internet / Wifi", fixedB: "Rác" },
+  B: { electricity: "Điện kinh doanh", water: "Nước sinh hoạt B", fixedA: "Cáp quang tốc độ cao", fixedB: "Vệ sinh & Gửi xe máy" },
+};
+
 async function main() {
   console.log("Seeding started...");
 
-  // 1. Clean existing data (in reverse order of foreign keys)
   await db.delete(invoices);
   await db.delete(roomUsages);
   await db.delete(tenants);
   await db.delete(services);
   await db.delete(rooms);
   await db.delete(hostels);
-
   console.log("Cleaned old data.");
 
-  // 2. Insert Hostels
   await db.insert(hostels).values([
     { id: "A", name: "Nhà trọ A" },
     { id: "B", name: "Nhà trọ B" },
   ]);
   console.log("Inserted hostels.");
 
-  // 3. Generate Rooms Data
   const roomsData: (typeof rooms.$inferInsert)[] = [];
   const tenantsData: (typeof tenants.$inferInsert)[] = [];
 
-  // --- Hostel A: 16 phòng (1 -> 16), mỗi phòng 2 người ---
-  for (let i = 1; i <= 16; i++) {
-    const roomNumber = i.toString(); // "1", "2", ..., "16"
-    const roomId = `a${i}`;
-    
-    roomsData.push({
-      id: roomId,
-      hostelId: "A",
-      number: roomNumber,
-      price: 2500000,
-      area: 25,
-      status: "rented",
-      description: `Phòng số ${roomNumber} - Nhà trọ A, sạch sẽ thoáng mát, vệ sinh khép kín`,
-    });
+  // Cấu hình mỗi dãy: số phòng, đơn giá, diện tích, khoảng ngày bắt đầu thuê
+  const hostelConfigs = [
+    { id: "A", count: 16, price: 2500000, area: 25, dateRange: ["2025-10-01", "2026-03-15"] as [string, string], desc: "Nhà trọ A" },
+    { id: "B", count: 7, price: 3500000, area: 35, dateRange: ["2025-12-01", "2026-04-01"] as [string, string], desc: "Nhà trọ B - căn hộ dịch vụ" },
+  ];
 
-    // 2 người ở phòng này
-    tenantsData.push(
-      {
-        id: `t_a${i}_1`,
-        hostelId: "A",
-        name: `Nguyễn Văn Khách Phòng ${roomNumber}-A`,
-        phone: `0912345${i.toString().padStart(3, "0")}`,
-        email: `khach.phong${roomNumber}a@gmail.com`,
-        identityCard: `001099000${i.toString().padStart(3, "0")}`,
-        birthYear: "1999",
-        permanentAddress: "Hà Nội",
-        roomId: roomId,
-        startDate: new Date("2026-01-15"),
-        deposit: 2500000,
-        isPrimary: true,
-      },
-      {
-        id: `t_a${i}_2`,
-        hostelId: "A",
-        name: `Trần Thị Khách Phòng ${roomNumber}-B`,
-        phone: `0987654${i.toString().padStart(3, "0")}`,
-        email: `khach.phong${roomNumber}b@gmail.com`,
-        identityCard: `002099000${i.toString().padStart(3, "0")}`,
-        birthYear: "2001",
-        permanentAddress: "Đà Nẵng",
-        roomId: roomId,
-        startDate: new Date("2026-01-15"),
-        deposit: 0,
-        isPrimary: false,
+  for (const cfg of hostelConfigs) {
+    for (let i = 1; i <= cfg.count; i++) {
+      const roomNumber = i.toString();
+      const roomId = `${cfg.id.toLowerCase()}${i}`;
+      // ~30% phòng chỉ ở 1 người, còn lại ở ghép 2 người — sát thực tế hơn
+      const occupancy = rng() < 0.3 ? 1 : 2;
+
+      roomsData.push({
+        id: roomId,
+        hostelId: cfg.id,
+        number: roomNumber,
+        price: cfg.price,
+        area: cfg.area,
+        status: "rented",
+        description: `Phòng số ${roomNumber} - ${cfg.desc}, sạch sẽ thoáng mát, vệ sinh khép kín`,
+      });
+
+      const moveInDate = randDate(cfg.dateRange[0], cfg.dateRange[1]);
+
+      for (let p = 1; p <= occupancy; p++) {
+        const person = genPerson(`t_${roomId}_${p}`);
+        tenantsData.push({
+          ...person,
+          hostelId: cfg.id,
+          roomId,
+          startDate: moveInDate,
+          deposit: p === 1 ? cfg.price : 0, // chủ phòng đóng cọc, người ở ghép không đóng thêm
+          isPrimary: p === 1,
+        });
       }
-    );
+    }
   }
 
-  // --- Hostel B: 7 phòng (1 -> 7), mỗi phòng 2 người ---
-  for (let i = 1; i <= 7; i++) {
-    const roomNumber = i.toString(); // "1", "2", ..., "7"
-    const roomId = `b${i}`;
-
-    roomsData.push({
-      id: roomId,
-      hostelId: "B",
-      number: roomNumber,
-      price: 3500000,
-      area: 35,
-      status: "rented",
-      description: `Căn hộ dịch vụ cao cấp - Phòng số ${roomNumber} - Nhà trọ B`,
+  // Vài tenant đã chuyển đi (để test lịch sử / bộ lọc deletedAt) — rải ở nhiều phòng khác nhau
+  const movedOutRoomIds = ["a1", "a5", "a12", "b2"];
+  for (const roomId of movedOutRoomIds) {
+    const person = genPerson(`t_${roomId}_moved_out`);
+    const hostelId = roomId.startsWith("a") ? "A" : "B";
+    tenantsData.push({
+      ...person,
+      hostelId,
+      roomId,
+      startDate: new Date("2025-06-01"),
+      deposit: 0,
+      isPrimary: false,
+      deletedAt: randDate("2026-02-01", "2026-04-30"),
     });
-
-    // 2 người ở phòng này
-    tenantsData.push(
-      {
-        id: `t_b${i}_1`,
-        hostelId: "B",
-        name: `Lê Văn Khách Phòng ${roomNumber}-B`, // Hậu tố -B để phân biệt với khách bên nhà A
-        phone: `0966778${i.toString().padStart(3, "0")}`,
-        email: `khach.b.phong${roomNumber}a@gmail.com`,
-        identityCard: `003099000${i.toString().padStart(3, "0")}`,
-        birthYear: "1997",
-        permanentAddress: "TP Hồ Chí Minh",
-        roomId: roomId,
-        startDate: new Date("2026-02-10"),
-        deposit: 3500000,
-        isPrimary: true,
-      },
-      {
-        id: `t_b${i}_2`,
-        hostelId: "B",
-        name: `Phạm Minh Khách Phòng ${roomNumber}-B`,
-        phone: `0933445${i.toString().padStart(3, "0")}`,
-        email: `khach.b.phong${roomNumber}b@gmail.com`,
-        identityCard: `004099000${i.toString().padStart(3, "0")}`,
-        birthYear: "1998",
-        permanentAddress: "Cần Thơ",
-        roomId: roomId,
-        startDate: new Date("2026-02-10"),
-        deposit: 0,
-        isPrimary: false,
-      }
-    );
   }
 
-  // Thêm một người thuê đã chuyển đi (soft deleted) để test bộ lọc lịch sử
-  tenantsData.push({
-    id: "t_a1_deleted_1",
-    hostelId: "A",
-    name: "Trần Thị Cựu Khách Phòng 1-A",
-    phone: "0900111222",
-    email: "cuu.khach1a@gmail.com",
-    identityCard: "001099111222",
-    dob: "1995-05-15",
-    gender: "Nữ",
-    birthYear: "1995",
-    permanentAddress: "Hải Phòng",
-    identityCardIssueDate: "2021-10-10",
-    roomId: "a1",
-    startDate: new Date("2025-09-01"),
-    deposit: 0,
-    isPrimary: false,
-    deletedAt: new Date("2026-03-31"),
-  });
-
-  // Thực thi insert vào DB
   await db.insert(rooms).values(roomsData);
   console.log(`Inserted ${roomsData.length} rooms.`);
 
   await db.insert(tenants).values(tenantsData);
   console.log(`Inserted ${tenantsData.length} tenants.`);
 
-  // 5. Insert Services
-  await db.insert(services).values([
-    { id: "s1", hostelId: "A", name: "Điện sinh hoạt", price: 3000, unit: "kWh", status: "active", description: "Tính theo công tơ điện riêng" },
-    { id: "s2", hostelId: "A", name: "Nước sạch", price: 5000, unit: "m³", status: "active", description: "Tính theo khối lượng nước tiêu thụ" },
-    { id: "s3", hostelId: "A", name: "Internet / Wifi", price: 20000, unit: "tháng/phòng", status: "active", description: "Internet gói 150Mbps" },
-    { id: "s4", hostelId: "A", name: "Rác", price: 30000, unit: "tháng/phòng", status: "active", description: "Thu gom rác và dọn dẹp" },
-    { id: "s5", hostelId: "B", name: "Điện kinh doanh", price: 4000, unit: "kWh", status: "active", description: "Điện khu dịch vụ cao cấp B" },
-    { id: "s6", hostelId: "B", name: "Nước sinh hoạt B", price: 18000, unit: "m³", status: "active", description: "Nước máy thành phố" },
-    { id: "s7", hostelId: "B", name: "Cáp quang tốc độ cao", price: 120000, unit: "tháng/phòng", status: "active", description: "Internet gói doanh nghiệp" },
-    { id: "s8", hostelId: "B", name: "Vệ sinh & Gửi xe máy", price: 150000, unit: "tháng/phòng", status: "active", description: "Dịch vụ giữ xe kèm vệ sinh chung" },
-  ]);
+  await db.insert(services).values(servicesData);
   console.log("Inserted services.");
 
-  // 6. Generate Invoices and Room Usages programmatically for all rooms over the last 3 months
+  // ==========================================
+  // Invoices + room usages — 3 tháng gần nhất, đơn giá lấy từ servicesData
+  // ==========================================
   const invoicesData: (typeof invoices.$inferInsert)[] = [];
   const roomUsagesData: (typeof roomUsages.$inferInsert)[] = [];
-
   const months = ["2026-04", "2026-05", "2026-06"];
 
-  // Hostel A
-  for (let i = 1; i <= 16; i++) {
-    const roomId = `a${i}`;
-    const roomNumber = i.toString();
+  for (const cfg of hostelConfigs) {
+    const rates = RATE_NAMES[cfg.id as "A" | "B"];
+    const elecRate = rateFor(cfg.id, rates.electricity);
+    const waterRate = rateFor(cfg.id, rates.water);
+    const fixedA = rateFor(cfg.id, rates.fixedA);
+    const fixedB = rateFor(cfg.id, rates.fixedB);
 
-    // Base readings
-    let prevElec = 100 + i * 10;
-    let prevWater = 10 + i * 2;
+    for (let i = 1; i <= cfg.count; i++) {
+      const roomId = `${cfg.id.toLowerCase()}${i}`;
+      const roomNumber = i.toString();
+      const primaryTenant = tenantsData.find((t) => t.roomId === roomId && t.isPrimary);
 
-    for (let m = 0; m < months.length; m++) {
-      const month = months[m];
-      const elecUsed = 80 + (i % 3) * 15 + m * 10;
-      const waterUsed = 6 + (i % 2) * 2 + m * 2;
+      let prevElec = randInt(80, 300);
+      let prevWater = randInt(8, 30);
+      // Xác suất phòng này có nợ tồn từ tháng trước — mỗi phòng random độc lập, không đồng loạt
+      let hasPendingDebt = false;
 
-      const currentElec = prevElec + elecUsed;
-      const currentWater = prevWater + waterUsed;
+      for (let m = 0; m < months.length; m++) {
+        const month = months[m];
+        const elecUsed = randInt(60, 180);
+        const waterUsed = randInt(4, 14);
+        const currentElec = prevElec + elecUsed;
+        const currentWater = prevWater + waterUsed;
 
-      const usageId = `ru_a_${i}_${m}`;
-      roomUsagesData.push({
-        id: usageId,
-        roomId,
-        month,
-        electricityStart: prevElec,
-        electricityEnd: currentElec,
-        waterStart: prevWater,
-        waterEnd: currentWater,
-        createdAt: new Date(`${month}-28`),
-      });
+        roomUsagesData.push({
+          id: `ru_${roomId}_${m}`,
+          roomId,
+          month,
+          electricityStart: prevElec,
+          electricityEnd: currentElec,
+          waterStart: prevWater,
+          waterEnd: currentWater,
+          createdAt: new Date(`${month}-28`),
+        });
 
-      // Invoice
-      const electricityCost = elecUsed * 3000;
-      const waterCost = waterUsed * 5000;
-      const otherServicesCost = 20000 + 30000; // Internet 20k + Trash 30k
-      const total = 2500000 + electricityCost + waterCost + otherServicesCost;
+        const electricityCost = elecUsed * elecRate;
+        const waterCost = waterUsed * waterRate;
+        const otherServicesCost = fixedA + fixedB;
+        const total = cfg.price + electricityCost + waterCost + otherServicesCost;
 
-      // Status: June invoice is unpaid, April and May are paid
-      const status = month === "2026-06" ? "unpaid" : "paid";
+        // Trạng thái thanh toán: mỗi phòng ~15% khả năng còn nợ ở bất kỳ tháng nào,
+        // tháng hiện tại (6/2026) tỷ lệ nợ cao hơn vì chưa tới hạn thu
+        const isLatestMonth = m === months.length - 1;
+        const unpaidChance = isLatestMonth ? 0.45 : 0.12;
+        const status = rng() < unpaidChance ? "unpaid" : "paid";
+        if (status === "unpaid") hasPendingDebt = true;
 
-      invoicesData.push({
-        id: `i_a_${i}_${m}`,
-        hostelId: "A",
-        roomId,
-        roomNumber,
-        tenantName: `Nguyễn Văn Khách Phòng ${roomNumber}-A`,
-        month,
-        roomPrice: 2500000,
-        electricityCost,
-        waterCost,
-        otherServicesCost,
-        total,
-        status,
-        createdAt: new Date(`${month}-30`),
-      });
+        invoicesData.push({
+          id: `i_${roomId}_${m}`,
+          hostelId: cfg.id,
+          roomId,
+          roomNumber,
+          tenantName: primaryTenant?.name ?? `Phòng ${roomNumber}`,
+          month,
+          roomPrice: cfg.price,
+          electricityCost,
+          waterCost,
+          otherServicesCost,
+          total,
+          status,
+          createdAt: new Date(`${month}-30`),
+        });
 
-      prevElec = currentElec;
-      prevWater = currentWater;
+        prevElec = currentElec;
+        prevWater = currentWater;
+      }
     }
   }
 
-  // Hostel B
-  for (let i = 1; i <= 7; i++) {
-    const roomId = `b${i}`;
-    const roomNumber = i.toString();
-
-    // Base readings
-    let prevElec = 200 + i * 15;
-    let prevWater = 15 + i * 3;
-
-    for (let m = 0; m < months.length; m++) {
-      const month = months[m];
-      const elecUsed = 120 + (i % 3) * 20 + m * 15;
-      const waterUsed = 10 + (i % 2) * 3 + m * 2;
-
-      const currentElec = prevElec + elecUsed;
-      const currentWater = prevWater + waterUsed;
-
-      const usageId = `ru_b_${i}_${m}`;
-      roomUsagesData.push({
-        id: usageId,
-        roomId,
-        month,
-        electricityStart: prevElec,
-        electricityEnd: currentElec,
-        waterStart: prevWater,
-        waterEnd: currentWater,
-        createdAt: new Date(`${month}-28`),
-      });
-
-      // Invoice
-      const electricityCost = elecUsed * 3000;
-      const waterCost = waterUsed * 5000;
-      const otherServicesCost = 20000 + 30000; // Internet 20k + Trash 30k
-      const total = 3500000 + electricityCost + waterCost + otherServicesCost;
-
-      // Status: June invoice is unpaid, April and May are paid
-      const status = month === "2026-06" ? "unpaid" : "paid";
-
-      invoicesData.push({
-        id: `i_b_${i}_${m}`,
-        hostelId: "B",
-        roomId,
-        roomNumber,
-        tenantName: `Lê Văn Khách Phòng ${roomNumber}-B`,
-        month,
-        roomPrice: 3500000,
-        electricityCost,
-        waterCost,
-        otherServicesCost,
-        total,
-        status,
-        createdAt: new Date(`${month}-30`),
-      });
-
-      prevElec = currentElec;
-      prevWater = currentWater;
-    }
-  }
-
-  // Perform inserts
   await db.insert(invoices).values(invoicesData);
   console.log(`Inserted ${invoicesData.length} invoices.`);
 

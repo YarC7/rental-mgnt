@@ -37,15 +37,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     const oldRoomId = oldTenant[0].roomId;
 
     const result = await db.transaction(async (tx) => {
-      const updatedTenant = await tx
-        .update(tenants)
-        .set(updateData)
-        .where(eq(tenants.id, id))
-        .returning();
-
-      // If this tenant is now primary, update all other tenants in the same room to non-primary
+      // 1. If this tenant is now primary, update all other tenants in the same room to non-primary FIRST
       if (updateData.isPrimary === true) {
-        const currentRoomId = updatedTenant[0].roomId;
+        const currentRoomId = body.roomId !== undefined ? body.roomId : oldRoomId;
         if (currentRoomId) {
           await tx
             .update(tenants)
@@ -53,6 +47,13 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             .where(and(eq(tenants.roomId, currentRoomId), ne(tenants.id, id)));
         }
       }
+
+      // 2. Perform the update on the target tenant
+      const updatedTenant = await tx
+        .update(tenants)
+        .set(updateData)
+        .where(eq(tenants.id, id))
+        .returning();
 
       // If the tenant was in a room and has been unlinked or moved
       if (oldRoomId && (body.roomId === null || body.roomId === "" || body.roomId !== oldRoomId)) {

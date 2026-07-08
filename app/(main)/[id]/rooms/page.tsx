@@ -734,8 +734,8 @@ export default function RoomsPage() {
           side={isMobile ? "bottom" : "right"} 
           className={`bg-white flex flex-col p-6 transition-all duration-300 ${
             isMobile 
-              ? "h-[85vh] max-h-[90vh] rounded-t-2xl border-t border-stone-200" 
-              : "data-[side=right]:sm:max-w-2xl w-full h-full"
+              ? "h-[85vh] max-h-[90vh] rounded-t-2xl border-t border-stone-200 overflow-hidden" 
+              : "data-[side=right]:sm:max-w-2xl w-full h-full overflow-hidden"
           }`}
         >
           <SheetHeader className="p-0 mb-4">
@@ -748,8 +748,8 @@ export default function RoomsPage() {
             </SheetDescription>
           </SheetHeader>
 
-          <form onSubmit={handleDetailSave} className="space-y-5 flex-1 flex flex-col justify-between">
-            <div className="space-y-5 overflow-y-auto pr-1 flex-1 min-h-0">
+          <form onSubmit={handleDetailSave} className="space-y-5 flex-1 flex flex-col justify-between min-h-0">
+            <div className="space-y-5 overflow-y-auto pr-0.5 flex-1 min-h-0">
               {/* Room Info Section */}
               <div>
                 <div 
@@ -986,11 +986,11 @@ export default function RoomsPage() {
 
                     {/* Residency Filtering Dropdown */}
                     {historicalTenants.length > 0 && (
-                      <div className="flex items-center justify-between bg-stone-50 p-2.5 rounded-lg border border-stone-200">
+                      <div className="flex items-center justify-between bg-stone-50 p-2 rounded-lg border border-stone-200">
                         <Label htmlFor="filter-tenant" className="text-[11px] font-medium text-stone-600">Lọc theo khách thuê:</Label>
                         <NativeSelect
                           id="filter-tenant"
-                          className="text-[11px] h-7 w-48 py-0.5 bg-white border border-stone-200"
+                          className="text-[11px] h-7 w-48"
                           value={selectedTenantFilter}
                           onChange={(e) => setSelectedTenantFilter(e.target.value)}
                         >

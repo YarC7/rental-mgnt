@@ -36,6 +36,13 @@
       "when": 1783424543210,
       "tag": "0004_add_room_usages_and_soft_delete",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1783479974677,
+      "tag": "0005_colossal_dark_phoenix",
+      "breakpoints": true
     }
   ]
 }
