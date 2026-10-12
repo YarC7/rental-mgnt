@@ -22,7 +22,7 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { hostelId, name, phone, email, identityCard, dob, gender, birthYear, permanentAddress, identityCardIssueDate, roomNumber, startDate, deposit, isPrimary } = body;
+    const { hostelId, name, phone, email, identityCard, dob, gender, birthYear, permanentAddress, identityCardIssueDate, roomNumber, startDate, deposit, isPrimary, residenceStatus, residenceRegisteredAt, residenceExpiresAt } = body;
 
     // Find the room by number and hostelId
     const roomRecord = await db
@@ -60,6 +60,9 @@ export async function POST(req: Request) {
         birthYear,
         permanentAddress,
         identityCardIssueDate: identityCardIssueDate || "",
+        residenceStatus: residenceStatus || "unregistered",
+        residenceRegisteredAt: residenceRegisteredAt || "",
+        residenceExpiresAt: residenceExpiresAt || "",
         roomId,
         startDate: new Date(startDate),
         deposit: Number(deposit),

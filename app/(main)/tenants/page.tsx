@@ -17,6 +17,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { NativeSelect } from "@/components/ui/native-select";
+import { ResidenceBadge, addTwoYears } from "@/components/residence-badge";
 import { useHostel, Tenant } from "@/context/HostelContext";
 
 export default function TenantsPage() {
@@ -38,6 +39,19 @@ export default function TenantsPage() {
   const [formRoom, setFormRoom] = useState("");
   const [formStartDate, setFormStartDate] = useState("");
   const [formDeposit, setFormDeposit] = useState("");
+  const [formResidenceStatus, setFormResidenceStatus] = useState<"unregistered" | "registered">("unregistered");
+  const [formResidenceRegisteredAt, setFormResidenceRegisteredAt] = useState("");
+  const [formResidenceExpiresAt, setFormResidenceExpiresAt] = useState("");
+  // true khi admin đã sửa tay ngày hết hạn → không tự ghi đè nữa
+  const [formResidenceExpiresTouched, setFormResidenceExpiresTouched] = useState(false);
+
+  // Ngày hết hạn = ngày đăng ký + 2 năm, tự điền trừ khi đã sửa tay
+  const handleResidenceRegisteredAtChange = (value: string) => {
+    setFormResidenceRegisteredAt(value);
+    if (!formResidenceExpiresTouched) {
+      setFormResidenceExpiresAt(value ? addTwoYears(value) : "");
+    }
+  };
 
   // Filter empty rooms of active hostel
   const hostelRooms = rooms.filter((r) => r.hostelId === currentHostel);
@@ -55,6 +69,10 @@ export default function TenantsPage() {
     setFormRoom(emptyRooms[0] || "");
     setFormStartDate(new Date().toISOString().split("T")[0]);
     setFormDeposit("2500000");
+    setFormResidenceStatus("unregistered");
+    setFormResidenceRegisteredAt("");
+    setFormResidenceExpiresAt("");
+    setFormResidenceExpiresTouched(false);
   };
 
   const handleAddTenant = (e: React.FormEvent) => {
@@ -74,6 +92,9 @@ export default function TenantsPage() {
       startDate: formStartDate || new Date().toISOString().split("T")[0],
       deposit: Number(formDeposit) || 0,
       isPrimary: false,
+      residenceStatus: formResidenceStatus,
+      residenceRegisteredAt: formResidenceStatus === "registered" ? formResidenceRegisteredAt : "",
+      residenceExpiresAt: formResidenceStatus === "registered" ? formResidenceExpiresAt : "",
     });
 
     resetForm();
@@ -91,6 +112,10 @@ export default function TenantsPage() {
     setFormRoom(tenant.roomNumber);
     setFormStartDate(tenant.startDate);
     setFormDeposit(tenant.deposit.toString());
+    setFormResidenceStatus(tenant.residenceStatus === "registered" ? "registered" : "unregistered");
+    setFormResidenceRegisteredAt(tenant.residenceRegisteredAt || "");
+    setFormResidenceExpiresAt(tenant.residenceExpiresAt || "");
+    setFormResidenceExpiresTouched(false);
     setIsOpenEdit(true);
   };
 
@@ -108,6 +133,9 @@ export default function TenantsPage() {
       roomNumber: formRoom,
       startDate: formStartDate,
       deposit: Number(formDeposit),
+      residenceStatus: formResidenceStatus,
+      residenceRegisteredAt: formResidenceStatus === "registered" ? formResidenceRegisteredAt : "",
+      residenceExpiresAt: formResidenceStatus === "registered" ? formResidenceExpiresAt : "",
     });
 
     setIsOpenEdit(false);
@@ -249,6 +277,28 @@ export default function TenantsPage() {
                 <Label htmlFor="deposit" className="text-[11px] font-semibold">Tiền đặt cọc phòng (VND)</Label>
                 <Input id="deposit" type="number" placeholder="2500000" value={formDeposit} onChange={(e) => setFormDeposit(e.target.value)} required />
               </div>
+              <div className="space-y-2 border-t pt-3">
+                <div className="space-y-1">
+                  <Label htmlFor="residence-status" className="text-[11px] font-semibold">Đăng ký tạm trú</Label>
+                  <NativeSelect id="residence-status" value={formResidenceStatus} onChange={(e) => setFormResidenceStatus(e.target.value as "unregistered" | "registered")}>
+                    <option value="unregistered">Chưa đăng ký</option>
+                    <option value="registered">Đã đăng ký</option>
+                  </NativeSelect>
+                </div>
+                {formResidenceStatus === "registered" && (
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <Label htmlFor="residence-registered-at" className="text-[11px] font-semibold">Ngày đăng ký</Label>
+                      <Input id="residence-registered-at" type="date" value={formResidenceRegisteredAt} onChange={(e) => handleResidenceRegisteredAtChange(e.target.value)} />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="residence-expires-at" className="text-[11px] font-semibold">Ngày hết hạn</Label>
+                      <Input id="residence-expires-at" type="date" value={formResidenceExpiresAt} onChange={(e) => { setFormResidenceExpiresAt(e.target.value); setFormResidenceExpiresTouched(true); }} />
+                    </div>
+                    <p className="col-span-2 text-[10px] text-muted-foreground italic">Ngày hết hạn tự động = ngày đăng ký + 2 năm (có thể sửa tay).</p>
+                  </div>
+                )}
+              </div>
               <DialogFooter className="pt-2">
                 <Button type="button" variant="ghost" size="sm" className="text-xs" onClick={() => setIsOpenAdd(false)}>Hủy</Button>
                 <Button type="submit" size="sm" className="text-xs">Đăng ký & Bàn giao</Button>
@@ -358,9 +408,13 @@ export default function TenantsPage() {
                           <span className="text-muted-foreground font-medium block text-[10px]">Email</span>
                           <span className="break-all">{primary.email || "N/A"}</span>
                         </div>
-                        <div className="col-span-2">
+                        <div className="col-span-2 sm:col-span-1">
                           <span className="text-muted-foreground font-medium block text-[10px]">Địa chỉ thường trú</span>
                           <span>{primary.permanentAddress}</span>
+                        </div>
+                        <div className="col-span-2 sm:col-span-1">
+                          <span className="text-muted-foreground font-medium block text-[10px]">Tạm trú</span>
+                          <span className="inline-block mt-1"><ResidenceBadge tenant={primary} /></span>
                         </div>
                       </div>
 
@@ -383,6 +437,7 @@ export default function TenantsPage() {
                                     <p>SĐT: <span className="text-foreground font-medium">{mate.phone}</span></p>
                                     <p>CCCD: <span className="text-foreground font-mono">{mate.identityCard}</span></p>
                                     <p className="truncate max-w-xs" title={mate.permanentAddress}>Địa chỉ: <span className="text-foreground italic">{mate.permanentAddress}</span></p>
+                                    <p className="pt-0.5"><ResidenceBadge tenant={mate} /></p>
                                   </div>
                                 </div>
                                 <div className="flex items-center gap-1">
@@ -479,6 +534,28 @@ export default function TenantsPage() {
             <div className="space-y-1">
               <Label htmlFor="edit-deposit" className="text-[11px] font-semibold">Tiền đặt cọc phòng (VND)</Label>
               <Input id="edit-deposit" type="number" value={formDeposit} onChange={(e) => setFormDeposit(e.target.value)} required />
+            </div>
+            <div className="space-y-2 border-t pt-3">
+              <div className="space-y-1">
+                <Label htmlFor="edit-residence-status" className="text-[11px] font-semibold">Đăng ký tạm trú</Label>
+                <NativeSelect id="edit-residence-status" value={formResidenceStatus} onChange={(e) => setFormResidenceStatus(e.target.value as "unregistered" | "registered")}>
+                  <option value="unregistered">Chưa đăng ký</option>
+                  <option value="registered">Đã đăng ký</option>
+                </NativeSelect>
+              </div>
+              {formResidenceStatus === "registered" && (
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <Label htmlFor="edit-residence-registered-at" className="text-[11px] font-semibold">Ngày đăng ký</Label>
+                    <Input id="edit-residence-registered-at" type="date" value={formResidenceRegisteredAt} onChange={(e) => handleResidenceRegisteredAtChange(e.target.value)} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="edit-residence-expires-at" className="text-[11px] font-semibold">Ngày hết hạn</Label>
+                    <Input id="edit-residence-expires-at" type="date" value={formResidenceExpiresAt} onChange={(e) => { setFormResidenceExpiresAt(e.target.value); setFormResidenceExpiresTouched(true); }} />
+                  </div>
+                  <p className="col-span-2 text-[10px] text-muted-foreground italic">Ngày hết hạn tự động = ngày đăng ký + 2 năm (có thể sửa tay).</p>
+                </div>
+              )}
             </div>
             <DialogFooter className="pt-2">
               <Button type="button" variant="ghost" size="sm" className="text-xs" onClick={() => setIsOpenEdit(false)}>Hủy</Button>

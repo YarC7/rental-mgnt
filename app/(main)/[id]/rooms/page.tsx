@@ -33,6 +33,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { NativeSelect } from "@/components/ui/native-select";
+import { ResidenceBadge, addTwoYears } from "@/components/residence-badge";
 import { useHostel, Room, RoomUsage } from "@/context/HostelContext";
 import { useIsMobile } from "@/hooks/use-mobile";
 import {
@@ -109,6 +110,17 @@ export default function RoomsPage() {
   const [tenantFormAddress, setTenantFormAddress] = useState("");
   const [tenantFormCccdDate, setTenantFormCccdDate] = useState("");
   const [tenantFormDeposit, setTenantFormDeposit] = useState("");
+  const [tenantFormResidenceStatus, setTenantFormResidenceStatus] = useState<"unregistered" | "registered">("unregistered");
+  const [tenantFormResidenceRegisteredAt, setTenantFormResidenceRegisteredAt] = useState("");
+  const [tenantFormResidenceExpiresAt, setTenantFormResidenceExpiresAt] = useState("");
+  const [tenantFormResidenceExpiresTouched, setTenantFormResidenceExpiresTouched] = useState(false);
+
+  const handleTenantResidenceRegisteredAtChange = (value: string) => {
+    setTenantFormResidenceRegisteredAt(value);
+    if (!tenantFormResidenceExpiresTouched) {
+      setTenantFormResidenceExpiresAt(value ? addTwoYears(value) : "");
+    }
+  };
 
   // QR Scanner State & Ref
   const [isOpenQRScanner, setIsOpenQRScanner] = useState(false);
@@ -132,6 +144,10 @@ export default function RoomsPage() {
     setTenantFormAddress("");
     setTenantFormCccdDate("");
     setTenantFormDeposit("");
+    setTenantFormResidenceStatus("unregistered");
+    setTenantFormResidenceRegisteredAt("");
+    setTenantFormResidenceExpiresAt("");
+    setTenantFormResidenceExpiresTouched(false);
   };
 
   const parseCCCDQR = (qrText: string) => {
@@ -318,6 +334,9 @@ export default function RoomsPage() {
       startDate: new Date().toISOString().split("T")[0],
       deposit: depositVal,
       isPrimary: !detailRoom.tenantName,
+      residenceStatus: tenantFormResidenceStatus,
+      residenceRegisteredAt: tenantFormResidenceStatus === "registered" ? tenantFormResidenceRegisteredAt : "",
+      residenceExpiresAt: tenantFormResidenceStatus === "registered" ? tenantFormResidenceExpiresAt : "",
     });
     resetTenantForm();
     setIsOpenAddTenant(false);
@@ -778,8 +797,8 @@ export default function RoomsPage() {
                   <div className="space-y-4">
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-1.5">
-                        <Label htmlFor="detail-number" className="text-xs font-medium">Số phòng</Label>
-                        <Input id="detail-number" placeholder="Ví dụ: 104" value={formNumber} onChange={(e) => setFormNumber(e.target.value)} required />
+                        <Label htmlFor="detail-price" className="text-xs font-medium">Giá thuê (VND/tháng)</Label>
+                        <Input id="detail-price" type="number" placeholder="2500000" value={formPrice} onChange={(e) => setFormPrice(e.target.value)} required />
                       </div>
                       <div className="space-y-1.5">
                         <Label htmlFor="detail-status" className="text-xs font-medium">Trạng thái</Label>
@@ -791,19 +810,19 @@ export default function RoomsPage() {
                       </div>
                     </div>
                     <div className="grid grid-cols-2 gap-4 mt-4">
-                      <div className="space-y-1.5">
-                        <Label htmlFor="detail-price" className="text-xs font-medium">Giá thuê (VND/tháng)</Label>
-                        <Input id="detail-price" type="number" placeholder="2500000" value={formPrice} onChange={(e) => setFormPrice(e.target.value)} required />
-                      </div>
-                      <div className="space-y-1.5">
+                      {/* <div className="space-y-1.5">
+                        <Label htmlFor="detail-number" className="text-xs font-medium">Số phòng</Label>
+                        <Input id="detail-number" placeholder="Ví dụ: 104" value={formNumber} onChange={(e) => setFormNumber(e.target.value)} required />
+                      </div> */}
+                      {/* <div className="space-y-1.5">
                         <Label htmlFor="detail-area" className="text-xs font-medium">Diện tích (m²)</Label>
                         <Input id="detail-area" type="number" placeholder="25" value={formArea} onChange={(e) => setFormArea(e.target.value)} required />
-                      </div>
+                      </div> */}
                     </div>
-                    <div className="space-y-1.5 mt-4">
+                    {/* <div className="space-y-1.5 mt-4">
                       <Label htmlFor="detail-desc" className="text-xs font-medium">Mô tả phòng</Label>
                       <Input id="detail-desc" placeholder="Gác lửng, tủ đồ, máy lạnh..." value={formDesc} onChange={(e) => setFormDesc(e.target.value)} />
-                    </div>
+                    </div> */}
                   </div>
                 )}
               </div>
@@ -855,6 +874,7 @@ export default function RoomsPage() {
                                     <p className="text-sm font-semibold">{tenant.name}</p>
                                   </div>
                                   <p className="text-[11px] text-muted-foreground">{tenant.phone}</p>
+                                  <div className="mt-1"><ResidenceBadge tenant={tenant} showDates={false} /></div>
                                 </div>
                               </div>
                               <div className="flex items-center gap-2">
@@ -1170,6 +1190,28 @@ export default function RoomsPage() {
                 <Label htmlFor="tenant-deposit-input" className="text-xs font-medium">Tiền đặt cọc (VND) <span className="text-destructive">*</span></Label>
                 <Input id="tenant-deposit-input" type="number" placeholder="2500000" value={tenantFormDeposit} onChange={(e) => setTenantFormDeposit(e.target.value)} required />
               </div>
+            </div>
+            <div className="space-y-2 border-t pt-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="tenant-residence-status" className="text-xs font-medium">Đăng ký tạm trú</Label>
+                <NativeSelect id="tenant-residence-status" value={tenantFormResidenceStatus} onChange={(e) => setTenantFormResidenceStatus(e.target.value as "unregistered" | "registered")}>
+                  <option value="unregistered">Chưa đăng ký</option>
+                  <option value="registered">Đã đăng ký</option>
+                </NativeSelect>
+              </div>
+              {tenantFormResidenceStatus === "registered" && (
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="tenant-residence-registered-at" className="text-xs font-medium">Ngày đăng ký</Label>
+                    <Input id="tenant-residence-registered-at" type="date" value={tenantFormResidenceRegisteredAt} onChange={(e) => handleTenantResidenceRegisteredAtChange(e.target.value)} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="tenant-residence-expires-at" className="text-xs font-medium">Ngày hết hạn</Label>
+                    <Input id="tenant-residence-expires-at" type="date" value={tenantFormResidenceExpiresAt} onChange={(e) => { setTenantFormResidenceExpiresAt(e.target.value); setTenantFormResidenceExpiresTouched(true); }} />
+                  </div>
+                  <p className="col-span-2 text-[10px] text-muted-foreground italic">Ngày hết hạn tự động = ngày đăng ký + 2 năm (có thể sửa tay).</p>
+                </div>
+              )}
             </div>
             <DialogFooter className="pt-2">
               <Button type="button" variant="ghost" size="sm" className="text-xs" onClick={() => { setIsOpenAddTenant(false); resetTenantForm(); }}>Hủy</Button>

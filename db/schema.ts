@@ -64,6 +64,10 @@ export const tenants = pgTable("tenants", {
   isPrimary: boolean("is_primary").notNull().default(false),
   deposit: integer("deposit").notNull().default(0),
   deletedAt: timestamp("deleted_at"),
+  // Đăng ký tạm trú (khai báo lưu trú với công an khu vực)
+  residenceStatus: text("residence_status").$type<"unregistered" | "registered">().notNull().default("unregistered"),
+  residenceRegisteredAt: text("residence_registered_at").notNull().default(""), // YYYY-MM-DD
+  residenceExpiresAt: text("residence_expires_at").notNull().default(""),       // YYYY-MM-DD
 }, (table) => [
   index("tenants_hostel_id_idx").on(table.hostelId),
   index("tenants_room_id_idx").on(table.roomId),

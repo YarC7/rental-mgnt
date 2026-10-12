@@ -22,6 +22,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     if (body.roomId !== undefined) updateData.roomId = body.roomId;
     if (body.identityCardIssueDate !== undefined) updateData.identityCardIssueDate = body.identityCardIssueDate;
     if (body.isPrimary !== undefined) updateData.isPrimary = body.isPrimary;
+    if (body.residenceStatus !== undefined) updateData.residenceStatus = body.residenceStatus;
+    if (body.residenceRegisteredAt !== undefined) updateData.residenceRegisteredAt = body.residenceRegisteredAt;
+    if (body.residenceExpiresAt !== undefined) updateData.residenceExpiresAt = body.residenceExpiresAt;
 
     // Get old tenant record to know their current roomId
     const oldTenant = await db
