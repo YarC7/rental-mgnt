@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { Home, Users, Settings, ReceiptText, Building2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useHostel } from "@/context/HostelContext";
+import { ThemeToggle } from "@/components/theme-toggle";
 import {
   Sidebar as SidebarBase,
   SidebarContent,
@@ -22,7 +23,7 @@ export default function Sidebar() {
   const pathname = usePathname() || "";
   const router = useRouter();
   const { currentHostel, hostels } = useHostel();
-  const { state } = useSidebar();
+  const { state, setOpenMobile } = useSidebar();
   const isCollapsed = state === "collapsed";
 
   const segments = pathname.split("/");
@@ -39,6 +40,7 @@ export default function Sidebar() {
   ];
 
   const handleSwitchHostel = (hostelId: string) => {
+    setOpenMobile(false);
     const segments = pathname.split("/");
     const activeHostelSegment = segments[1];
     if (activeHostelSegment && !staticSegments.includes(activeHostelSegment)) {
@@ -92,7 +94,7 @@ export default function Sidebar() {
               const isActive = pathname === item.href;
               return (
                 <SidebarMenuItem key={item.href}>
-                  <SidebarMenuButton asChild isActive={isActive} tooltip={item.name}>
+                  <SidebarMenuButton asChild isActive={isActive} tooltip={item.name} onClick={() => setOpenMobile(false)}>
                     <Link href={item.href}>
                       <Icon />
                       <span>{item.name}</span>
@@ -110,10 +112,11 @@ export default function Sidebar() {
           <div className="w-9 h-9 rounded-full bg-sidebar-accent flex items-center justify-center text-sidebar-accent-foreground text-xs font-semibold flex-shrink-0">
             QT
           </div>
-          <div className="group-data-[collapsible=icon]:hidden">
+          <div className="group-data-[collapsible=icon]:hidden min-w-0 flex-1">
             <p className="text-xs font-semibold text-sidebar-foreground leading-none">Quản trị viên</p>
-            <p className="text-[10px] text-sidebar-foreground/50 mt-1">Hệ thống ngoại tuyến</p>
+            <p className="text-[10px] text-sidebar-foreground/50 mt-1">ZenBoard</p>
           </div>
+          <ThemeToggle className="text-sidebar-foreground/70 hover:text-sidebar-foreground shrink-0" />
         </div>
       </SidebarFooter>
     </SidebarBase>

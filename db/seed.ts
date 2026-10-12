@@ -107,14 +107,14 @@ function genPerson(id: string) {
 // Rate lookup — reads directly from services data, never hard-coded
 // ==========================================
 const servicesData: (typeof services.$inferInsert)[] = [
-  { id: "s1", hostelId: "A", name: "Điện sinh hoạt", price: 3000, unit: "kWh", status: "active", description: "Tính theo công tơ điện riêng" },
-  { id: "s2", hostelId: "A", name: "Nước sạch", price: 5000, unit: "m³", status: "active", description: "Tính theo khối lượng nước tiêu thụ" },
-  { id: "s3", hostelId: "A", name: "Internet / Wifi", price: 20000, unit: "tháng/phòng", status: "active", description: "Internet gói 150Mbps" },
+  { id: "s1", hostelId: "A", name: "Điện", price: 3000, unit: "kWh", status: "active", description: "Tính theo công tơ điện riêng" },
+  { id: "s2", hostelId: "A", name: "Nước", price: 5000, unit: "m³", status: "active", description: "Tính theo khối lượng nước tiêu thụ" },
+  { id: "s3", hostelId: "A", name: "Wifi", price: 20000, unit: "tháng/phòng", status: "active", description: "Internet gói 150Mbps" },
   { id: "s4", hostelId: "A", name: "Rác", price: 30000, unit: "tháng/phòng", status: "active", description: "Thu gom rác và dọn dẹp" },
-  { id: "s5", hostelId: "B", name: "Điện kinh doanh", price: 4000, unit: "kWh", status: "active", description: "Điện khu dịch vụ cao cấp B" },
-  { id: "s6", hostelId: "B", name: "Nước sinh hoạt B", price: 18000, unit: "m³", status: "active", description: "Nước máy thành phố" },
-  { id: "s7", hostelId: "B", name: "Cáp quang tốc độ cao", price: 120000, unit: "tháng/phòng", status: "active", description: "Internet gói doanh nghiệp" },
-  { id: "s8", hostelId: "B", name: "Vệ sinh & Gửi xe máy", price: 150000, unit: "tháng/phòng", status: "active", description: "Dịch vụ giữ xe kèm vệ sinh chung" },
+  { id: "s5", hostelId: "B", name: "Điện", price: 4000, unit: "kWh", status: "active", description: "Tính theo công tơ điện riêng" },
+  { id: "s6", hostelId: "B", name: "Nước", price: 18000, unit: "m³", status: "active", description: "Tính theo khối lượng nước tiêu thụ" },
+  { id: "s7", hostelId: "B", name: "Wifi", price: 120000, unit: "tháng/phòng", status: "active", description: "Internet gói 150Mbps" },
+  { id: "s8", hostelId: "B", name: "Rác", price: 150000, unit: "tháng/phòng", status: "active", description: "Thu gom rác và dọn dẹp" },
 ];
 
 function rateFor(hostelId: string, name: string): number {

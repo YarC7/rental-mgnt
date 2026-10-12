@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { Plus, Search, ReceiptText, Check, X, ShieldAlert, AlertCircle, Eye, Printer } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import {
   Dialog,
   DialogContent,
@@ -19,7 +20,6 @@ import { NativeSelect } from "@/components/ui/native-select";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { useHostel, Invoice } from "@/context/HostelContext";
-import Link from "next/link";
 
 export default function InvoicesPage() {
   const { invoices, addInvoice, deleteInvoice, toggleInvoicePaid, rooms, services, currentHostel } = useHostel();
@@ -27,20 +27,6 @@ export default function InvoicesPage() {
   const [statusFilter, setStatusFilter] = useState("all");
 
   // Bank settings states loaded on mount to prevent hydration mismatch
-  const [bankId, setBankId] = useState("VCB");
-  const [accountNo, setAccountNo] = useState("0123456789");
-  const [accountName, setAccountName] = useState("NGUYEN VAN A");
-  const [bankTemplate, setBankTemplate] = useState("compact2");
-
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      setBankId(localStorage.getItem("bankId") || "VCB");
-      setAccountNo(localStorage.getItem("accountNo") || "0123456789");
-      setAccountName(localStorage.getItem("accountName") || "NGUYEN VAN A");
-      setBankTemplate(localStorage.getItem("bankTemplate") || "compact2");
-    }
-  }, []);
-
   // Dialog State
   const [isOpenAdd, setIsOpenAdd] = useState(false);
   const [isOpenDetail, setIsOpenDetail] = useState(false);
@@ -71,16 +57,11 @@ export default function InvoicesPage() {
   const [internetActive, setInternetActive] = useState(true);
   const [cleaningActive, setCleaningActive] = useState(true);
 
-  // Set default room in form when active rooms change
-  useEffect(() => {
-    if (activeHostelRooms.length > 0) {
-      setFormRoomNum(activeHostelRooms[0].number);
-    } else {
-      setFormRoomNum("");
-    }
-  }, [currentHostel, isOpenAdd]);
+  const selectedRoomNum = formRoomNum && activeHostelRooms.some((r) => r.number === formRoomNum)
+    ? formRoomNum
+    : (activeHostelRooms[0]?.number ?? "");
 
-  const selectedRoomDetails = hostelRooms.find((r) => r.number === formRoomNum) || activeHostelRooms[0];
+  const selectedRoomDetails = hostelRooms.find((r) => r.number === selectedRoomNum) || activeHostelRooms[0];
   const roomPrice = selectedRoomDetails?.price || 0;
   const tenantName = selectedRoomDetails?.tenantName || "Không xác định";
 
@@ -95,10 +76,10 @@ export default function InvoicesPage() {
 
   const handleCreateInvoice = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formRoomNum) return;
+    if (!selectedRoomNum) return;
 
     addInvoice({
-      roomNumber: formRoomNum,
+      roomNumber: selectedRoomNum,
       tenantName: tenantName,
       month: formMonth,
       roomPrice: roomPrice,
@@ -118,7 +99,15 @@ export default function InvoicesPage() {
     }
   };
 
+  const getBankSettings = () => ({
+    bankId: localStorage.getItem("bankId") || "VCB",
+    accountNo: localStorage.getItem("accountNo") || "0123456789",
+    accountName: localStorage.getItem("accountName") || "NGUYEN VAN A",
+    bankTemplate: localStorage.getItem("bankTemplate") || "compact2",
+  });
+
   const getVietQRUrl = (invoice: Invoice) => {
+    const { bankId, accountNo, accountName, bankTemplate } = getBankSettings();
     const amount = invoice.total;
     const addInfo = encodeURIComponent(`Thanh toan phong ${invoice.roomNumber} thang ${invoice.month}`);
     const name = encodeURIComponent(accountName);
@@ -127,15 +116,23 @@ export default function InvoicesPage() {
   };
 
   const handlePrint = async (invoice: Invoice) => {
+    interface UsageDetail {
+      month: string;
+      electricityStart: number;
+      electricityEnd: number;
+      waterStart: number;
+      waterEnd: number;
+    }
     // Tìm phòng và lấy chỉ số điện nước thực tế
+    const { bankId, accountNo, accountName } = getBankSettings();
     const room = rooms.find((r) => r.number === invoice.roomNumber && r.hostelId === currentHostel);
-    let usage: any = null;
+    let usage: UsageDetail | null = null;
     if (room) {
       try {
         const res = await fetch(`/api/rooms/${room.id}/usages`);
         if (res.ok) {
-          const usages = await res.json();
-          usage = usages.find((u: any) => u.month === invoice.month);
+          const usages: UsageDetail[] = await res.json();
+          usage = usages.find((u) => u.month === invoice.month) ?? null;
         }
       } catch (e) {
         console.error("Failed to fetch usage details", e);
@@ -146,7 +143,7 @@ export default function InvoicesPage() {
 
     const printWindow = window.open("", "_blank");
     if (!printWindow) {
-      alert("Vui lòng cho phép mở cửa sổ bật lên để in hóa đơn.");
+      toast.error("Vui lòng cho phép mở cửa sổ bật lên để in hóa đơn.");
       return;
     }
 
@@ -298,116 +295,145 @@ export default function InvoicesPage() {
     return matchesSearch && matchesStatus;
   });
 
+  // Group invoices by room for a compact overview
+  const groupedInvoices = useMemo(() => {
+    const map = new Map<string, Invoice[]>();
+    filteredInvoices.forEach((inv) => {
+      const list = map.get(inv.roomNumber) ?? [];
+      list.push(inv);
+      map.set(inv.roomNumber, list);
+    });
+    return [...map.entries()]
+      .map(([roomNumber, list]) => {
+        const sorted = [...list].sort((a, b) => b.month.localeCompare(a.month));
+        const unpaid = sorted.filter((i) => i.status === "unpaid");
+        return {
+          roomNumber,
+          tenantName: sorted[0]?.tenantName ?? "Không xác định",
+          invoices: sorted,
+          unpaidCount: unpaid.length,
+          unpaidTotal: unpaid.reduce((sum, i) => sum + i.total, 0),
+        };
+      })
+      .sort((a, b) => a.roomNumber.localeCompare(b.roomNumber, undefined, { numeric: true }));
+  }, [filteredInvoices]);
+
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(price);
   };
 
+  const formatDate = (iso: string) => {
+    const d = new Date(iso);
+    return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString("vi-VN");
+  };
+
   return (
-    <div className="p-8 w-full 2xl:max-w-6xl mx-auto space-y-6 font-sans text-stone-900">
+    <div className="p-4 sm:p-6 lg:p-8 w-full 2xl:max-w-6xl mx-auto space-y-6">
       {/* Title & Actions */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h2 className="text-xl font-semibold text-stone-900">Tính Tiền & Hóa Đơn - Nhà trọ {currentHostel}</h2>
-          <p className="text-stone-500 text-xs mt-0.5">Lập hóa đơn hàng tháng tự động tính toán tiền điện nước và dịch vụ đi kèm.</p>
+          <h2 className="text-lg sm:text-xl font-semibold">Tính Tiền & Hóa Đơn - Nhà trọ {currentHostel}</h2>
+          <p className="text-muted-foreground text-xs mt-0.5">Lập hóa đơn hàng tháng tự động tính toán tiền điện nước và dịch vụ đi kèm.</p>
         </div>
 
         <Dialog open={isOpenAdd} onOpenChange={setIsOpenAdd}>
           <DialogTrigger asChild>
-            <Button
-              disabled={activeHostelRooms.length === 0}
-              className="bg-stone-900 hover:bg-stone-800 text-white text-xs gap-1.5 py-2 px-3.5 rounded-lg shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-            >
+              <Button
+                disabled={activeHostelRooms.length === 0}
+                size="sm"
+                className="text-xs gap-1.5 w-full sm:w-auto"
+              >
               <Plus className="w-4 h-4" /> Lập hóa đơn mới
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-2xl bg-white">
+          <DialogContent className="max-w-[calc(100%-2rem)] sm:max-w-2xl">
             <DialogHeader>
-              <DialogTitle className="text-stone-900 text-base font-semibold">Công cụ tính tiền & Lập hóa đơn (Nhà trọ {currentHostel})</DialogTitle>
-              <DialogDescription className="text-stone-500 text-xs">
+              <DialogTitle className="text-base font-semibold">Công cụ tính tiền & Lập hóa đơn (Nhà trọ {currentHostel})</DialogTitle>
+              <DialogDescription className="text-xs">
                 Chọn phòng đã thuê và nhập số điện, nước tháng này để hệ thống tự động tính toán tổng hóa đơn.
               </DialogDescription>
             </DialogHeader>
-            <form onSubmit={handleCreateInvoice} className="space-y-4 py-2 text-stone-900">
+            <form onSubmit={handleCreateInvoice} className="space-y-4 py-2">
               {/* Step 1: Chọn phòng & Tháng */}
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="space-y-1.5">
-                  <Label htmlFor="roomNum" className="text-stone-700 text-xs font-medium">Chọn Phòng Thuê</Label>
-                  <NativeSelect id="roomNum" value={formRoomNum} onChange={(e) => setFormRoomNum(e.target.value)}>
+                  <Label htmlFor="roomNum" className="text-xs font-medium">Chọn Phòng Thuê</Label>
+                  <NativeSelect id="roomNum" value={selectedRoomNum} onChange={(e) => setFormRoomNum(e.target.value)}>
                     {activeHostelRooms.map((r) => (
                       <option key={r.number} value={r.number}>Phòng {r.number} ({r.tenantName})</option>
                     ))}
                   </NativeSelect>
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="month" className="text-stone-700 text-xs font-medium">Tháng tính tiền</Label>
+                  <Label htmlFor="month" className="text-xs font-medium">Tháng tính tiền</Label>
                   <Input id="month" type="month" value={formMonth} onChange={(e) => setFormMonth(e.target.value)} required />
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-stone-700 text-xs font-medium">Giá phòng cơ bản</Label>
-                  <div className="h-9 flex items-center px-3 border border-stone-200 rounded-lg bg-stone-50 text-xs font-semibold">
+                  <Label className="text-xs font-medium">Giá phòng cơ bản</Label>
+                  <div className="h-9 flex items-center px-3 border rounded-lg bg-muted text-xs font-semibold">
                     {formatPrice(roomPrice)}
                   </div>
                 </div>
               </div>
 
               {/* Step 2: Nhập số Điện Nước */}
-              <div className="grid grid-cols-2 gap-6 p-4 rounded-lg bg-stone-50 border border-stone-200">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 p-4 rounded-lg bg-muted border">
                 {/* Electricity Section */}
                 <div className="space-y-3">
-                  <h4 className="text-xs font-semibold text-stone-800 border-b pb-1">Chỉ số Điện ({formatPrice(elecRate)}/kWh)</h4>
+                  <h4 className="text-xs font-semibold border-b pb-1">Chỉ số Điện ({formatPrice(elecRate)}/kWh)</h4>
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1.5">
-                      <Label htmlFor="elecOld" className="text-[10px] text-stone-600 font-medium">Số cũ (kWh)</Label>
-                      <Input id="elecOld" type="number" value={elecOld} onChange={(e) => setFormRoomNum(e.target.value)} className="bg-white" />
+                      <Label htmlFor="elecOld" className="text-[10px] font-medium">Số cũ (kWh)</Label>
+                      <Input id="elecOld" type="number" value={elecOld} onChange={(e) => setElecOld(e.target.value)} />
                     </div>
                     <div className="space-y-1.5">
-                      <Label htmlFor="elecNew" className="text-[10px] text-stone-600 font-medium">Số mới (kWh)</Label>
-                      <Input id="elecNew" type="number" value={elecNew} onChange={(e) => setElecNew(e.target.value)} className="bg-white" />
+                      <Label htmlFor="elecNew" className="text-[10px] font-medium">Số mới (kWh)</Label>
+                      <Input id="elecNew" type="number" value={elecNew} onChange={(e) => setElecNew(e.target.value)} />
                     </div>
                   </div>
-                  <div className="text-xs text-stone-500 font-medium pt-1">
-                    Tiêu thụ: <span className="text-stone-900 font-semibold">{calculatedElecUnits} kWh</span> = <span className="text-stone-900 font-bold">{formatPrice(calculatedElecCost)}</span>
+                  <div className="text-xs text-muted-foreground font-medium pt-1">
+                    Tiêu thụ: <span className="text-foreground font-semibold">{calculatedElecUnits} kWh</span> = <span className="text-foreground font-bold">{formatPrice(calculatedElecCost)}</span>
                   </div>
                 </div>
 
                 {/* Water Section */}
                 <div className="space-y-3">
-                  <h4 className="text-xs font-semibold text-stone-800 border-b pb-1">Chỉ số Nước ({formatPrice(waterRate)}/m³)</h4>
+                  <h4 className="text-xs font-semibold border-b pb-1">Chỉ số Nước ({formatPrice(waterRate)}/m³)</h4>
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1.5">
-                      <Label htmlFor="waterOld" className="text-[10px] text-stone-600 font-medium">Số cũ (m³)</Label>
-                      <Input id="waterOld" type="number" value={waterOld} onChange={(e) => setWaterOld(e.target.value)} className="bg-white" />
+                      <Label htmlFor="waterOld" className="text-[10px] font-medium">Số cũ (m³)</Label>
+                      <Input id="waterOld" type="number" value={waterOld} onChange={(e) => setWaterOld(e.target.value)} />
                     </div>
                     <div className="space-y-1.5">
-                      <Label htmlFor="waterNew" className="text-[10px] text-stone-600 font-medium">Số mới (m³)</Label>
-                      <Input id="waterNew" type="number" value={waterNew} onChange={(e) => setWaterNew(e.target.value)} className="bg-white" />
+                      <Label htmlFor="waterNew" className="text-[10px] font-medium">Số mới (m³)</Label>
+                      <Input id="waterNew" type="number" value={waterNew} onChange={(e) => setWaterNew(e.target.value)} />
                     </div>
                   </div>
-                  <div className="text-xs text-stone-500 font-medium pt-1">
-                    Tiêu thụ: <span className="text-stone-900 font-semibold">{calculatedWaterUnits} m³</span> = <span className="text-stone-900 font-bold">{formatPrice(calculatedWaterCost)}</span>
+                  <div className="text-xs text-muted-foreground font-medium pt-1">
+                    Tiêu thụ: <span className="text-foreground font-semibold">{calculatedWaterUnits} m³</span> = <span className="text-foreground font-bold">{formatPrice(calculatedWaterCost)}</span>
                   </div>
                 </div>
               </div>
 
               {/* Step 3: Dịch vụ cố định */}
               <div className="space-y-2">
-                <h4 className="text-xs font-semibold text-stone-800">Các tiện ích cộng thêm (Thiết lập tại Đơn giá)</h4>
-                <div className="flex gap-6">
-                  <label className="flex items-center gap-2 text-xs text-stone-700 cursor-pointer font-medium">
+                <h4 className="text-xs font-semibold">Các tiện ích cộng thêm (Thiết lập tại Đơn giá)</h4>
+                <div className="flex flex-col gap-3 sm:flex-row sm:gap-6">
+                  <label className="flex items-center gap-2 text-xs cursor-pointer font-medium">
                     <input
                       type="checkbox"
                       checked={internetActive}
                       onChange={(e) => setInternetActive(e.target.checked)}
-                      className="w-4 h-4 rounded accent-stone-800"
+                      className="w-4 h-4 rounded accent-foreground"
                     />
                     Internet ({formatPrice(internetRate)}/tháng)
                   </label>
-                  <label className="flex items-center gap-2 text-xs text-stone-700 cursor-pointer font-medium">
+                  <label className="flex items-center gap-2 text-xs cursor-pointer font-medium">
                     <input
                       type="checkbox"
                       checked={cleaningActive}
                       onChange={(e) => setCleaningActive(e.target.checked)}
-                      className="w-4 h-4 rounded accent-stone-800"
+                      className="w-4 h-4 rounded accent-foreground"
                     />
                     Vệ sinh & Rác ({formatPrice(cleaningRate)}/tháng)
                   </label>
@@ -415,22 +441,22 @@ export default function InvoicesPage() {
               </div>
 
               {/* Total Calculation Display */}
-              <Card className="bg-stone-900 text-stone-50 border-0 overflow-hidden shadow-sm">
-                <CardContent className="p-4 flex justify-between items-center">
+              <Card className="bg-foreground text-background border-0 overflow-hidden shadow-sm">
+                <CardContent className="p-4 flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center">
                   <div>
-                    <p className="text-[10px] text-stone-400 font-medium tracking-wider">TỔNG HÓA ĐƠN THÁNG {formMonth}</p>
-                    <p className="text-lg font-bold tracking-tight text-white mt-0.5">{formatPrice(calculatedTotal)}</p>
+                    <p className="text-[10px] text-background/60 font-medium tracking-wider">TỔNG HÓA ĐƠN THÁNG {formMonth}</p>
+                    <p className="text-lg font-bold tracking-tight mt-0.5">{formatPrice(calculatedTotal)}</p>
                   </div>
-                  <div className="text-right text-[10px] text-stone-300">
-                    <p>Phòng: {formRoomNum} ({tenantName})</p>
-                    <p className="mt-1">Nhấp 'Tạo hóa đơn' để lưu ở trạng thái Chưa thanh toán</p>
+                  <div className="text-left sm:text-right text-[10px] text-background/70">
+                    <p>Phòng: {selectedRoomNum} ({tenantName})</p>
+                    <p className="mt-1">Nhấp &quot;Tạo hóa đơn&quot; để lưu ở trạng thái Chưa thanh toán</p>
                   </div>
                 </CardContent>
               </Card>
 
               <DialogFooter className="pt-2">
-                <Button type="button" variant="ghost" className="text-xs" onClick={() => setIsOpenAdd(false)}>Hủy</Button>
-                <Button type="submit" className="bg-stone-900 text-white text-xs hover:bg-stone-800">Tạo hóa đơn</Button>
+                <Button type="button" variant="ghost" size="sm" className="text-xs" onClick={() => setIsOpenAdd(false)}>Hủy</Button>
+                <Button type="submit" size="sm" className="text-xs">Tạo hóa đơn</Button>
               </DialogFooter>
             </form>
           </DialogContent>
@@ -441,7 +467,7 @@ export default function InvoicesPage() {
       {/* Filter and search */}
       <div className="flex flex-col sm:flex-row gap-4">
         <div className="relative flex-1">
-          <Search className="absolute left-3.5 top-2.5 h-4 w-4 text-stone-400" />
+          <Search className="absolute left-3.5 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Tìm theo số phòng hoặc tên khách..."
             value={searchTerm}
@@ -451,11 +477,11 @@ export default function InvoicesPage() {
         </div>
         <div className="flex gap-2 items-center">
           {activeHostelRooms.length === 0 && (
-            <p className="text-xs text-amber-600 bg-amber-50 border border-amber-100 px-3 py-1.5 rounded-lg font-semibold">
+            <p className="text-xs text-warning bg-warning-bg border border-warning-border px-3 py-1.5 rounded-lg font-semibold">
               Chưa có phòng nào được thuê!
             </p>
           )}
-          <div className="w-full 2xl:max-w-6xl sm:w-48">
+          <div className="w-full sm:w-48">
             <NativeSelect value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="text-xs">
               <option value="all">Tất cả thanh toán</option>
               <option value="paid">Đã thanh toán</option>
@@ -465,138 +491,158 @@ export default function InvoicesPage() {
         </div>
       </div>
 
-      {/* Invoices List Table */}
-      <div className="bg-white rounded-xl border border-stone-200 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <Table>
-            <TableHeader className="bg-stone-50">
-              <TableRow>
-                <TableHead className="text-stone-700 text-xs font-semibold py-3.5 pl-6">Mã Hóa đơn</TableHead>
-                <TableHead className="text-stone-700 text-xs font-semibold py-3.5">Phòng / Khách thuê</TableHead>
-                <TableHead className="text-stone-700 text-xs font-semibold py-3.5">Kỳ hóa đơn</TableHead>
-                <TableHead className="text-stone-700 text-xs font-semibold py-3.5">Ngày lập</TableHead>
-                <TableHead className="text-stone-700 text-xs font-semibold py-3.5">Tổng số tiền</TableHead>
-                <TableHead className="text-stone-700 text-xs font-semibold py-3.5">Trạng thái</TableHead>
-                <TableHead className="text-stone-700 text-xs font-semibold py-3.5 text-right pr-6">Hành động</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredInvoices.length > 0 ? (
-                filteredInvoices.map((inv) => (
-                  <TableRow key={inv.id} className="hover:bg-stone-50/50">
-                    <TableCell className="py-4 pl-6 font-mono text-xs text-stone-500 font-semibold">
-                      #HD-{inv.id}
-                    </TableCell>
-                    <TableCell className="py-4">
-                      <div>
-                        <p className="font-semibold text-stone-900 text-xs">P. {inv.roomNumber}</p>
-                        <p className="text-[10px] text-stone-500">{inv.tenantName}</p>
+      {/* Invoices grouped by room */}
+      <div className="space-y-4">
+        {groupedInvoices.length > 0 ? (
+          <Accordion type="multiple" className="w-full space-y-3">
+            {groupedInvoices.map((group) => (
+              <AccordionItem
+                key={group.roomNumber}
+                value={group.roomNumber}
+                className="bg-card border rounded-xl overflow-hidden shadow-xs"
+              >
+                <AccordionTrigger className="flex-1 px-4 sm:px-6 py-4 hover:no-underline border-0 bg-transparent">
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 w-full pr-4 text-left">
+                    {/* Left: Room badge & tenant */}
+                    <div className="flex items-center gap-3 min-w-0">
+                      <span className="inline-flex items-center justify-center h-8 px-3 rounded-lg text-xs font-bold bg-primary text-primary-foreground min-w-[90px] shrink-0">
+                        Phòng {group.roomNumber}
+                      </span>
+                      <div className="min-w-0">
+                        <p className="font-semibold text-xs truncate">{group.tenantName}</p>
+                        <p className="text-[10px] text-muted-foreground">{group.invoices.length} hóa đơn</p>
                       </div>
-                    </TableCell>
-                    <TableCell className="py-4 text-xs font-semibold text-stone-700">{inv.month}</TableCell>
-                    <TableCell className="py-4 text-xs text-stone-600">{inv.createdAt}</TableCell>
-                    <TableCell className="py-4 text-xs font-bold text-stone-900">{formatPrice(inv.total)}</TableCell>
-                    <TableCell className="py-4">
-                      <button
-                        onClick={() => toggleInvoicePaid(inv.id)}
-                        className="cursor-pointer focus:outline-none"
-                        title="Click để thay đổi trạng thái"
+                    </div>
+                    {/* Right: payment summary */}
+                    <div className="flex items-center gap-2 sm:ml-auto flex-wrap">
+                      {group.unpaidCount > 0 ? (
+                        <>
+                          <Badge variant="warning" className="shrink-0">{group.unpaidCount} chưa đóng</Badge>
+                          <span className="text-xs font-bold whitespace-nowrap">{formatPrice(group.unpaidTotal)}</span>
+                        </>
+                      ) : (
+                        <Badge variant="success" className="shrink-0">Đã thanh toán hết</Badge>
+                      )}
+                    </div>
+                  </div>
+                </AccordionTrigger>
+
+                <AccordionContent className="px-4 sm:px-6 border-t bg-muted/30">
+                  <div className="py-4 space-y-2.5">
+                    {group.invoices.map((inv) => (
+                      <div
+                        key={inv.id}
+                        className="bg-card p-3 sm:p-4 rounded-lg border flex flex-col sm:flex-row sm:items-center gap-3 shadow-xs"
                       >
-                        {inv.status === "paid" ? (
-                          <Badge className="bg-emerald-50 text-emerald-700 border-emerald-100 flex items-center gap-1 w-fit hover:bg-emerald-50">
-                            <Check className="w-3 h-3" /> Đã đóng
-                          </Badge>
-                        ) : (
-                          <Badge className="bg-rose-50 text-rose-700 border-rose-100 flex items-center gap-1 w-fit hover:bg-rose-50">
-                            <X className="w-3 h-3" /> Chưa đóng
-                          </Badge>
-                        )}
-                      </button>
-                    </TableCell>
-                    <TableCell className="py-4 text-right pr-6 space-x-1.5">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-stone-500 hover:text-stone-950"
-                        onClick={() => openDetail(inv)}
-                        title="Xem chi tiết"
-                      >
-                        <Eye className="w-3.5 h-3.5" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-stone-500 hover:text-stone-950"
-                        onClick={() => handlePrint(inv)}
-                        title="In hóa đơn"
-                      >
-                        <Printer className="w-3.5 h-3.5" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-stone-500 hover:text-rose-600"
-                        onClick={() => handleDeleteInvoice(inv.id)}
-                        title="Xóa hóa đơn"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))
-              ) : (
-                <TableRow>
-                  <TableCell colSpan={7} className="text-center py-12 space-y-2">
-                    <ShieldAlert className="w-6 h-6 mx-auto text-stone-400" />
-                    <p className="text-stone-500 text-xs">Không tìm thấy hóa đơn nào phù hợp.</p>
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </div>
+                        <div className="min-w-0 sm:w-44 shrink-0">
+                          <p className="text-xs font-bold">Kỳ {inv.month}</p>
+                          <p className="font-mono text-[10px] text-muted-foreground break-all">#HD-{inv.id} · {formatDate(inv.createdAt)}</p>
+                        </div>
+                        <p className="text-sm font-bold whitespace-nowrap sm:flex-1">{formatPrice(inv.total)}</p>
+                        <div className="flex items-center justify-between sm:justify-end gap-1.5">
+                          <button
+                            onClick={() => toggleInvoicePaid(inv.id)}
+                            className="cursor-pointer focus:outline-none"
+                            title="Click để thay đổi trạng thái"
+                          >
+                            {inv.status === "paid" ? (
+                              <Badge variant="success" className="flex items-center gap-1 w-fit">
+                                <Check className="w-3 h-3" /> Đã đóng
+                              </Badge>
+                            ) : (
+                              <Badge variant="danger" className="flex items-center gap-1 w-fit">
+                                <X className="w-3 h-3" /> Chưa đóng
+                              </Badge>
+                            )}
+                          </button>
+                          <div className="flex items-center gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              className="text-muted-foreground hover:text-foreground"
+                              onClick={() => openDetail(inv)}
+                              title="Xem chi tiết"
+                              aria-label={`Xem chi tiết hóa đơn phòng ${inv.roomNumber}`}
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              className="text-muted-foreground hover:text-foreground"
+                              onClick={() => handlePrint(inv)}
+                              title="In hóa đơn"
+                              aria-label={`In hóa đơn phòng ${inv.roomNumber}`}
+                            >
+                              <Printer className="w-3.5 h-3.5" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              className="text-muted-foreground hover:text-destructive"
+                              onClick={() => handleDeleteInvoice(inv.id)}
+                              title="Xóa hóa đơn"
+                              aria-label={`Xóa hóa đơn phòng ${inv.roomNumber}`}
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+            ))}
+          </Accordion>
+        ) : (
+          <div className="bg-card rounded-xl border shadow-xs py-12 text-center space-y-2">
+            <ShieldAlert className="w-6 h-6 mx-auto text-muted-foreground" />
+            <p className="text-muted-foreground text-xs">Không tìm thấy hóa đơn nào phù hợp.</p>
+          </div>
+        )}
       </div>
 
       {/* Invoice Detail Dialog / Receipt print view */}
       <Dialog open={isOpenDetail} onOpenChange={setIsOpenDetail}>
-        <DialogContent className="max-w-md bg-white">
+          <DialogContent className="max-w-[calc(100%-2rem)] sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="text-stone-900 text-base font-bold flex items-center gap-2">
-              <ReceiptText className="w-5 h-5 text-stone-700" /> Chi tiết Hóa đơn thanh toán
+            <DialogTitle className="text-base font-bold flex items-center gap-2">
+              <ReceiptText className="w-5 h-5" /> Chi tiết Hóa đơn thanh toán
             </DialogTitle>
           </DialogHeader>
           {selectedInvoice && (
-            <div className="space-y-4 py-2 border-t pt-4 text-stone-900">
+            <div className="space-y-4 py-2 border-t pt-4">
               <div className="flex justify-between items-center text-xs">
-                <span className="text-stone-500">Mã hóa đơn:</span>
+                <span className="text-muted-foreground">Mã hóa đơn:</span>
                 <span className="font-mono font-semibold">#HD-{selectedInvoice.id}</span>
               </div>
               <div className="flex justify-between items-center text-xs">
-                <span className="text-stone-500">Kỳ thanh toán:</span>
+                <span className="text-muted-foreground">Kỳ thanh toán:</span>
                 <span className="font-semibold">{selectedInvoice.month}</span>
               </div>
               <div className="flex justify-between items-center text-xs">
-                <span className="text-stone-500">Phòng / Khách thuê:</span>
+                <span className="text-muted-foreground">Phòng / Khách thuê:</span>
                 <span className="font-semibold">P. {selectedInvoice.roomNumber} - {selectedInvoice.tenantName}</span>
               </div>
 
               {/* Items Breakdown */}
               <div className="space-y-2.5 border-y py-3.5 text-xs">
-                <h4 className="font-semibold text-stone-800 text-[11px] uppercase tracking-wider">Chi tiết các khoản tính</h4>
+                <h4 className="font-semibold text-[11px] uppercase tracking-wider">Chi tiết các khoản tính</h4>
                 <div className="flex justify-between">
-                  <span className="text-stone-600">Tiền phòng cơ bản:</span>
+                  <span className="text-muted-foreground">Tiền phòng cơ bản:</span>
                   <span className="font-semibold">{formatPrice(selectedInvoice.roomPrice)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-stone-600">Tiền điện tiêu thụ:</span>
+                  <span className="text-muted-foreground">Tiền điện tiêu thụ:</span>
                   <span className="font-semibold">{formatPrice(selectedInvoice.electricityCost)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-stone-600">Tiền nước tiêu thụ:</span>
+                  <span className="text-muted-foreground">Tiền nước tiêu thụ:</span>
                   <span className="font-semibold">{formatPrice(selectedInvoice.waterCost)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-stone-600">Internet & Vệ sinh:</span>
+                  <span className="text-muted-foreground">Internet & Vệ sinh:</span>
                   <span className="font-semibold">{formatPrice(selectedInvoice.otherServicesCost)}</span>
                 </div>
               </div>
@@ -604,14 +650,14 @@ export default function InvoicesPage() {
               {/* Summary and Paid indicator */}
               <div className="flex justify-between items-center">
                 <div>
-                  <p className="text-[10px] text-stone-400 font-semibold uppercase">TỔNG CỘNG</p>
-                  <p className="text-lg font-black text-stone-900 leading-none mt-1">{formatPrice(selectedInvoice.total)}</p>
+                  <p className="text-[10px] text-muted-foreground font-semibold uppercase">TỔNG CỘNG</p>
+                  <p className="text-lg font-black leading-none mt-1">{formatPrice(selectedInvoice.total)}</p>
                 </div>
                 <div>
                   {selectedInvoice.status === "paid" ? (
-                    <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200">Đã thanh toán</Badge>
+                    <Badge variant="success">Đã thanh toán</Badge>
                   ) : (
-                    <Badge className="bg-rose-100 text-rose-800 border-rose-200">Chưa đóng tiền</Badge>
+                    <Badge variant="danger">Chưa đóng tiền</Badge>
                   )}
                 </div>
               </div>
@@ -619,23 +665,23 @@ export default function InvoicesPage() {
               {/* Warning/Alert for unpaid invoice */}
               {selectedInvoice.status === "unpaid" && (
                 <>
-                  <div className="p-3 bg-amber-50 rounded-lg border border-amber-100 flex items-start gap-2.5 text-[11px] text-amber-800">
+                  <div className="p-3 bg-warning-bg rounded-lg border border-warning-border flex items-start gap-2.5 text-[11px] text-warning">
                     <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
                     <p>Hóa đơn này chưa đóng tiền phòng. Bạn có thể nhấn trực tiếp vào trạng thái ở danh sách bên ngoài để chuyển thành đã thanh toán sau khi nhận được tiền mặt hoặc chuyển khoản.</p>
                   </div>
                   
                   {/* VietQR payment image in UI if unpaid */}
-                  <div className="flex flex-col items-center justify-center p-3.5 border border-stone-200 rounded-lg bg-stone-50/50 space-y-2">
-                    <span className="text-[10px] text-stone-500 font-bold uppercase tracking-wider">Mã QR Thanh toán (Chuyển khoản nhanh)</span>
+                  {/* <div className="flex flex-col items-center justify-center p-3.5 border rounded-lg bg-muted/50 space-y-2">
+                    <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">Mã QR Thanh toán (Chuyển khoản nhanh)</span>
                     <img
                       src={getVietQRUrl(selectedInvoice)}
-                      alt="VietQR Payment"
+                      alt="Mã VietQR thanh toán"
                       className="w-44 h-44 object-contain rounded-md bg-white border p-1 shadow-sm"
                     />
-                    <p className="text-[10px] text-stone-550 text-center font-medium">
-                      Quét mã để chuyển nhanh <span className="font-bold text-stone-900">{formatPrice(selectedInvoice.total)}</span>
+                    <p className="text-[10px] text-muted-foreground text-center font-medium">
+                      Quét mã để chuyển nhanh <span className="font-bold text-foreground">{formatPrice(selectedInvoice.total)}</span>
                     </p>
-                  </div>
+                  </div> */}
                 </>
               )}
             </div>
@@ -644,12 +690,13 @@ export default function InvoicesPage() {
             <Button
               type="button"
               variant="outline"
-              className="flex-1 text-xs border-stone-300 text-stone-700 hover:bg-stone-50"
+              size="sm"
+              className="flex-1 text-xs"
               onClick={() => selectedInvoice && handlePrint(selectedInvoice)}
             >
               <Printer className="w-3.5 h-3.5 mr-1.5" /> In hóa đơn
             </Button>
-            <Button className="flex-1 bg-stone-900 hover:bg-stone-800 text-white text-xs" onClick={() => setIsOpenDetail(false)}>Đóng lại</Button>
+            <Button size="sm" className="flex-1 text-xs" onClick={() => setIsOpenDetail(false)}>Đóng lại</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

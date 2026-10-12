@@ -3,8 +3,9 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useIsFetching } from "@tanstack/react-query";
 import { Plus, Search, Home, MoreVertical, Edit2, Trash2, ShieldAlert, LayoutGrid, List, ArrowUpDown, ArrowUp, ArrowDown, User, Crown, Loader2, QrCode, ChevronDown, ChevronUp } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -33,6 +34,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { NativeSelect } from "@/components/ui/native-select";
 import { useHostel, Room, RoomUsage } from "@/context/HostelContext";
+import { useIsMobile } from "@/hooks/use-mobile";
 import {
   useReactTable,
   getCoreRowModel,
@@ -41,7 +43,15 @@ import {
   createColumnHelper,
   type SortingState,
 } from "@tanstack/react-table";
-import { Html5Qrcode } from "html5-qrcode";
+import type { Html5Qrcode } from "html5-qrcode";
+
+interface HistoricalTenant {
+  id: string;
+  name: string;
+  roomId: string | null;
+  roomNumber: string;
+  deletedAt?: string | null;
+}
 
 export default function RoomsPage() {
   const { rooms, tenants, addRoom, editRoom, deleteRoom, addTenant, editTenant, currentHostel, getRoomUsages, saveRoomUsage, invoices } = useHostel();
@@ -56,7 +66,7 @@ export default function RoomsPage() {
 
   // Room Usages State
   const [usagesList, setUsagesList] = useState<RoomUsage[]>([]);
-  const [historicalTenants, setHistoricalTenants] = useState<any[]>([]);
+  const [historicalTenants, setHistoricalTenants] = useState<HistoricalTenant[]>([]);
   const [selectedTenantFilter, setSelectedTenantFilter] = useState<string>("all");
   const [isLoadingUsages, setIsLoadingUsages] = useState(false);
 
@@ -75,13 +85,7 @@ export default function RoomsPage() {
   const [isUtilitiesOpen, setIsUtilitiesOpen] = useState(true);
 
   // Responsive Layout check
-  const [isMobile, setIsMobile] = useState(false);
-  useEffect(() => {
-    const checkMobile = () => setIsMobile(window.innerWidth < 640);
-    checkMobile();
-    window.addEventListener("resize", checkMobile);
-    return () => window.removeEventListener("resize", checkMobile);
-  }, []);
+  const isMobile = useIsMobile();
 
   // Form State
   const [isOpenAdd, setIsOpenAdd] = useState(false);
@@ -133,7 +137,7 @@ export default function RoomsPage() {
   const parseCCCDQR = (qrText: string) => {
     const parts = qrText.split("|");
     if (parts.length < 6) {
-      alert("Định dạng mã QR không khớp với CCCD Việt Nam!");
+      toast.error("Định dạng mã QR không khớp với CCCD Việt Nam!");
       return null;
     }
 
@@ -184,49 +188,53 @@ export default function RoomsPage() {
   };
 
   useEffect(() => {
-    if (isOpenQRScanner) {
-      setQrError("");
-      const timer = setTimeout(() => {
-        const html5Qrcode = new Html5Qrcode("reader");
-        scannerRef.current = html5Qrcode;
+    if (!isOpenQRScanner) return;
+    setQrError("");
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      // Lazy-load the heavy QR library only when the scanner is opened
+      const { Html5Qrcode } = await import("html5-qrcode");
+      if (cancelled) return;
+      const html5Qrcode = new Html5Qrcode("reader");
+      scannerRef.current = html5Qrcode;
 
-        html5Qrcode.start(
-          { facingMode: "environment" },
-          {
-            fps: 10,
-            qrbox: { width: 220, height: 220 }
-          },
-          (decodedText) => {
-            const parsed = parseCCCDQR(decodedText);
-            if (parsed) {
-              setTenantFormName(parsed.name);
-              setTenantFormCccd(parsed.cccd);
-              setTenantFormDob(parsed.dob);
-              setTenantFormAddress(parsed.address);
-              if (parsed.issueDate) {
-                setTenantFormCccdDate(parsed.issueDate);
-              }
-              if (parsed.gender) {
-                setTenantFormGender(parsed.gender);
-              }
-              stopScanner();
-              setIsOpenQRScanner(false);
+      html5Qrcode.start(
+        { facingMode: "environment" },
+        {
+          fps: 10,
+          qrbox: { width: 220, height: 220 }
+        },
+        (decodedText) => {
+          const parsed = parseCCCDQR(decodedText);
+          if (parsed) {
+            setTenantFormName(parsed.name);
+            setTenantFormCccd(parsed.cccd);
+            setTenantFormDob(parsed.dob);
+            setTenantFormAddress(parsed.address);
+            if (parsed.issueDate) {
+              setTenantFormCccdDate(parsed.issueDate);
             }
-          },
-          () => {
-            // Bỏ qua lỗi quét trên từng khung hình
+            if (parsed.gender) {
+              setTenantFormGender(parsed.gender);
+            }
+            stopScanner();
+            setIsOpenQRScanner(false);
           }
-        ).catch((err) => {
-          console.error("Failed to start QR scanner:", err);
-          setQrError("Không thể mở camera. Vui lòng cấp quyền camera cho trang web.");
-        });
-      }, 300);
+        },
+        () => {
+          // Bỏ qua lỗi quét trên từng khung hình
+        }
+      ).catch((err) => {
+        console.error("Failed to start QR scanner:", err);
+        setQrError("Không thể mở camera. Vui lòng cấp quyền camera cho trang web.");
+      });
+    }, 300);
 
-      return () => {
-        clearTimeout(timer);
-        stopScanner();
-      };
-    }
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+      stopScanner();
+    };
   }, [isOpenQRScanner]);
 
   // Load room usages when detail dialog is opened or filter changes
@@ -247,7 +255,7 @@ export default function RoomsPage() {
     if (isOpenDetail && detailRoom) {
       fetch("/api/tenants?includeDeleted=true")
         .then((res) => res.json())
-        .then((data: any[]) => {
+        .then((data: HistoricalTenant[]) => {
           const matched = data.filter(
             (t) => t.roomId === detailRoom.id || t.roomNumber === detailRoom.number
           );
@@ -282,9 +290,10 @@ export default function RoomsPage() {
       setRecordWaterStart("");
       setRecordWaterEnd("");
       setIsFormOpen(false);
+      toast.success("Đã lưu chỉ số điện nước.");
     } catch (err) {
       console.error(err);
-      alert("Lỗi khi lưu chỉ số điện nước.");
+      toast.error("Lỗi khi lưu chỉ số điện nước.");
     } finally {
       setIsRecording(false);
     }
@@ -317,7 +326,7 @@ export default function RoomsPage() {
   const handleUnlinkTenant = (tenantId: string, tenantName: string, isPrimary: boolean) => {
     if (confirm(`Bạn có chắc chắn muốn gỡ người thuê ${tenantName} khỏi phòng này?`)) {
       // 1. Gỡ người thuê khỏi phòng bằng cách đặt roomId = null và isPrimary = false
-      editTenant(tenantId, { roomId: null as any, isPrimary: false });
+      editTenant(tenantId, { roomId: null as unknown as string, isPrimary: false });
 
       // 2. Nếu người bị gỡ đang là chủ phòng, chọn người khác làm chủ phòng mới
       if (isPrimary && detailRoom) {
@@ -423,11 +432,11 @@ export default function RoomsPage() {
   const getStatusBadge = (status: Room["status"]) => {
     switch (status) {
       case "empty":
-        return <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200">Đang trống</Badge>;
+        return <Badge variant="success">Đang trống</Badge>;
       case "rented":
-        return <Badge className="bg-blue-100 text-blue-800 border-blue-200">Đã thuê</Badge>;
+        return <Badge variant="info">Đã thuê</Badge>;
       case "maintenance":
-        return <Badge className="bg-amber-100 text-amber-800 border-amber-200">Bảo trì</Badge>;
+        return <Badge variant="warning">Bảo trì</Badge>;
     }
   };
 
@@ -442,22 +451,22 @@ export default function RoomsPage() {
       header: "Phòng",
       cell: (info) => (
         <div className="flex items-center gap-2">
-          <Home className="w-3.5 h-3.5 text-stone-400" />
-          <span className="font-semibold text-stone-900">{info.getValue()}</span>
+          <Home className="w-3.5 h-3.5 text-muted-foreground" />
+          <span className="font-semibold">{info.getValue()}</span>
         </div>
       ),
     }),
     columnHelper.accessor("area", {
       header: "Diện tích",
-      cell: (info) => <span className="text-stone-600">{info.getValue()} m²</span>,
+      cell: (info) => <span className="text-muted-foreground">{info.getValue()} m²</span>,
     }),
     columnHelper.accessor("price", {
       header: "Giá thuê",
-      cell: (info) => <span className="font-semibold text-stone-900">{formatPrice(info.getValue())}</span>,
+      cell: (info) => <span className="font-semibold whitespace-nowrap">{formatPrice(info.getValue())}</span>,
     }),
     columnHelper.accessor("tenantName", {
       header: "Khách thuê",
-      cell: (info) => info.getValue() || <span className="text-stone-400">—</span>,
+      cell: (info) => info.getValue() || <span className="text-muted-foreground">Trống</span>,
     }),
     columnHelper.accessor("status", {
       header: "Trạng thái",
@@ -472,15 +481,15 @@ export default function RoomsPage() {
           <div className="text-right">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-7 w-7 text-stone-400 hover:text-stone-900">
+                <Button variant="ghost" size="icon-sm" className="text-muted-foreground hover:text-foreground" aria-label={`Thao tác phòng ${room.number}`}>
                   <MoreVertical className="w-3.5 h-3.5" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="bg-white">
+              <DropdownMenuContent align="end">
                 <DropdownMenuItem onClick={() => openEditDialog(room)} className="text-xs flex gap-2 cursor-pointer">
                   <Edit2 className="w-3.5 h-3.5" /> Chỉnh sửa
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => handleDeleteRoom(room.id)} className="text-xs text-rose-600 flex gap-2 cursor-pointer">
+                <DropdownMenuItem onClick={() => handleDeleteRoom(room.id)} className="text-xs text-destructive flex gap-2 cursor-pointer">
                   <Trash2 className="w-3.5 h-3.5" /> Xóa phòng
                 </DropdownMenuItem>
               </DropdownMenuContent>
@@ -503,41 +512,41 @@ export default function RoomsPage() {
   const isFetching = useIsFetching();
 
   return (
-    <div className="p-8 w-full space-y-6 font-sans text-stone-900">
+    <div className="p-4 sm:p-6 lg:p-8 w-full space-y-6">
       {/* Global loading overlay */}
       {mounted && isFetching > 0 && (
-        <div className="fixed top-3 right-3 z-50 flex items-center gap-2 bg-white/90 backdrop-blur-sm border border-stone-200 rounded-lg px-3 py-2 shadow-sm">
-          <Loader2 className="size-4 text-stone-500 animate-spin" />
-          <span className="text-[11px] text-stone-500 font-medium">Đang đồng bộ...</span>
+        <div className="fixed top-3 right-3 z-50 flex items-center gap-2 bg-card/90 backdrop-blur-sm border rounded-lg px-3 py-2 shadow-sm">
+          <Loader2 className="size-4 text-muted-foreground animate-spin" />
+          <span className="text-[11px] text-muted-foreground font-medium">Đang đồng bộ...</span>
         </div>
       )}
       {/* Title & Action */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h2 className="text-xl font-semibold text-stone-900">Quản lý Phòng trọ - Nhà trọ {currentHostel}</h2>
-          <p className="text-stone-500 text-xs mt-0.5">Danh sách, trạng thái và thiết lập giá các phòng trong khu trọ.</p>
+          <h2 className="text-lg sm:text-xl font-semibold">Quản lý Phòng trọ - Nhà trọ {currentHostel}</h2>
+          <p className="text-muted-foreground text-xs mt-0.5">Danh sách, trạng thái và thiết lập giá các phòng trong khu trọ.</p>
         </div>
 
         <Dialog open={isOpenAdd} onOpenChange={(open) => { setIsOpenAdd(open); if (!open) resetForm(); }}>
           <DialogTrigger asChild>
-            <Button className="bg-stone-900 hover:bg-stone-800 text-white text-xs gap-1.5 py-2 px-3.5 rounded-lg shadow-sm">
+            <Button size="sm" className="text-xs gap-1.5 w-full sm:w-auto">
               <Plus className="w-4 h-4" /> Thêm phòng mới
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-md bg-white">
+          <DialogContent className="max-w-[calc(100%-2rem)] sm:max-w-md">
             <DialogHeader>
-              <DialogTitle className="text-stone-900 text-base font-semibold">Tạo phòng trọ mới (Nhà trọ {currentHostel})</DialogTitle>
-              <DialogDescription className="text-stone-500 text-xs">Điền các thông tin cơ bản để thêm phòng trọ vào hệ thống.</DialogDescription>
+              <DialogTitle className="text-base font-semibold">Tạo phòng trọ mới (Nhà trọ {currentHostel})</DialogTitle>
+              <DialogDescription className="text-xs">Điền các thông tin cơ bản để thêm phòng trọ vào hệ thống.</DialogDescription>
             </DialogHeader>
             <form onSubmit={handleAddRoom} className="space-y-4 py-2">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <Label htmlFor="number" className="text-stone-700 text-xs font-medium">Số phòng</Label>
+                  <Label htmlFor="number" className="text-xs font-medium">Số phòng</Label>
                   <Input id="number" placeholder="Ví dụ: 104" value={formNumber} onChange={(e) => setFormNumber(e.target.value)} required />
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="status" className="text-stone-700 text-xs font-medium">Trạng thái</Label>
-                  <NativeSelect id="status" value={formStatus} onChange={(e) => setFormStatus(e.target.value as any)}>
+                  <Label htmlFor="status" className="text-xs font-medium">Trạng thái</Label>
+                  <NativeSelect id="status" value={formStatus} onChange={(e) => setFormStatus(e.target.value as Room["status"])}>
                     <option value="empty">Đang trống</option>
                     <option value="rented">Đã thuê</option>
                     <option value="maintenance">Bảo trì</option>
@@ -546,21 +555,21 @@ export default function RoomsPage() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <Label htmlFor="price" className="text-stone-700 text-xs font-medium">Giá thuê (VND/tháng)</Label>
+                  <Label htmlFor="price" className="text-xs font-medium">Giá thuê (VND/tháng)</Label>
                   <Input id="price" type="number" placeholder="2500000" value={formPrice} onChange={(e) => setFormPrice(e.target.value)} required />
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="area" className="text-stone-700 text-xs font-medium">Diện tích (m²)</Label>
+                  <Label htmlFor="area" className="text-xs font-medium">Diện tích (m²)</Label>
                   <Input id="area" type="number" placeholder="25" value={formArea} onChange={(e) => setFormArea(e.target.value)} required />
                 </div>
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="desc" className="text-stone-700 text-xs font-medium">Mô tả phòng</Label>
+                <Label htmlFor="desc" className="text-xs font-medium">Mô tả phòng</Label>
                 <Input id="desc" placeholder="Gác lửng, tủ đồ, máy lạnh..." value={formDesc} onChange={(e) => setFormDesc(e.target.value)} />
               </div>
               <DialogFooter className="pt-2">
-                <Button type="button" variant="ghost" className="text-xs" onClick={() => setIsOpenAdd(false)}>Hủy</Button>
-                <Button type="submit" className="bg-stone-900 text-white text-xs hover:bg-stone-800">Lưu lại</Button>
+                <Button type="button" variant="ghost" size="sm" className="text-xs" onClick={() => setIsOpenAdd(false)}>Hủy</Button>
+                <Button type="submit" size="sm" className="text-xs">Lưu lại</Button>
               </DialogFooter>
             </form>
           </DialogContent>
@@ -570,7 +579,7 @@ export default function RoomsPage() {
       {/* Filter & Search */}
       <div className="flex flex-col sm:flex-row gap-4">
         <div className="relative flex-1">
-          <Search className="absolute left-3.5 top-2.5 h-4 w-4 text-stone-400" />
+          <Search className="absolute left-3.5 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Tìm theo số phòng hoặc khách thuê..."
             value={searchTerm}
@@ -578,7 +587,7 @@ export default function RoomsPage() {
             className="pl-10 text-xs"
           />
         </div>
-        <div className="w-full 2xl:max-w-6xl sm:w-48">
+        <div className="w-full sm:w-48">
           <NativeSelect value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="text-xs">
             <option value="all">Tất cả trạng thái</option>
             <option value="empty">Đang trống</option>
@@ -586,16 +595,20 @@ export default function RoomsPage() {
             <option value="maintenance">Bảo trì</option>
           </NativeSelect>
         </div>
-        <div className="flex items-center border border-stone-200 rounded-lg overflow-hidden">
+        <div className="flex items-center border rounded-lg overflow-hidden w-full sm:w-auto">
           <button
             onClick={() => setViewMode("grid")}
-            className={`p-2 ${viewMode === "grid" ? "bg-stone-900 text-white" : "bg-white text-stone-400 hover:text-stone-600"}`}
+            aria-label="Xem dạng lưới"
+            aria-pressed={viewMode === "grid"}
+            className={`flex-1 sm:flex-none flex justify-center p-2 transition-colors ${viewMode === "grid" ? "bg-primary text-primary-foreground" : "bg-card text-muted-foreground hover:text-foreground"}`}
           >
             <LayoutGrid className="w-4 h-4" />
           </button>
           <button
             onClick={() => setViewMode("list")}
-            className={`p-2 ${viewMode === "list" ? "bg-stone-900 text-white" : "bg-white text-stone-400 hover:text-stone-600"}`}
+            aria-label="Xem dạng danh sách"
+            aria-pressed={viewMode === "list"}
+            className={`flex-1 sm:flex-none flex justify-center p-2 transition-colors ${viewMode === "list" ? "bg-primary text-primary-foreground" : "bg-card text-muted-foreground hover:text-foreground"}`}
           >
             <List className="w-4 h-4" />
           </button>
@@ -606,38 +619,38 @@ export default function RoomsPage() {
       {!mounted || (isFetching > 0 && rooms.length === 0) ? (
         <div className="flex items-center justify-center py-24">
           <div className="flex flex-col items-center gap-3">
-            <Loader2 className="size-8 text-stone-400 animate-spin" />
-            <p className="text-sm text-stone-500">Đang tải dữ liệu...</p>
+            <Loader2 className="size-8 text-muted-foreground animate-spin" />
+            <p className="text-sm text-muted-foreground">Đang tải dữ liệu...</p>
           </div>
         </div>
       ) : viewMode === "grid" ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4 sm:gap-6">
           {filteredRooms.length > 0 ? (
             filteredRooms.map((room) => (
-              <Card key={room.id} className="bg-white border-stone-200 hover:shadow-md transition-shadow relative overflow-hidden flex flex-col justify-between cursor-pointer" onClick={() => openDetailDialog(room)}>
-                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <div className="flex items-center gap-2">
-                    <div className="p-2 rounded-lg bg-stone-100 text-stone-800">
+              <Card key={room.id} className="hover:shadow-md transition-shadow relative overflow-hidden flex flex-col justify-between cursor-pointer" onClick={() => openDetailDialog(room)}>
+                <CardHeader className="flex flex-row items-center justify-between pb-2 gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className="p-2 rounded-lg bg-muted text-foreground shrink-0">
                       <Home className="w-4 h-4" />
                     </div>
-                    <div>
-                      <CardTitle className="text-base font-semibold text-stone-900">Phòng {room.number}</CardTitle>
-                      <p className="text-[10px] text-stone-500">{room.area} m²</p>
+                    <div className="min-w-0">
+                      <CardTitle className="text-base font-semibold truncate">Phòng {room.number}</CardTitle>
+                      <p className="text-[10px] text-muted-foreground">{room.area} m²</p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
                     {getStatusBadge(room.status)}
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-stone-500 hover:text-stone-950">
+                        <Button variant="ghost" size="icon-sm" className="text-muted-foreground hover:text-foreground" aria-label={`Thao tác phòng ${room.number}`}>
                           <MoreVertical className="w-4 h-4" />
                         </Button>
                       </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="bg-white">
+                      <DropdownMenuContent align="end">
                         <DropdownMenuItem onClick={() => openEditDialog(room)} className="text-xs flex gap-2 cursor-pointer">
                           <Edit2 className="w-3.5 h-3.5" /> Chỉnh sửa
                         </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => handleDeleteRoom(room.id)} className="text-xs text-rose-600 flex gap-2 cursor-pointer">
+                        <DropdownMenuItem onClick={() => handleDeleteRoom(room.id)} className="text-xs text-destructive flex gap-2 cursor-pointer">
                           <Trash2 className="w-3.5 h-3.5" /> Xóa phòng
                         </DropdownMenuItem>
                       </DropdownMenuContent>
@@ -648,58 +661,58 @@ export default function RoomsPage() {
                 <CardContent className="py-2 flex-1">
                   <div className="space-y-2">
                     <div>
-                      <p className="text-[10px] text-stone-400 font-medium">GIÁ THUÊ</p>
-                      <p className="text-lg font-bold text-stone-900 leading-tight">{formatPrice(room.price)}<span className="text-[10px] text-stone-500 font-normal">/tháng</span></p>
+                      <p className="text-[10px] text-muted-foreground font-medium">GIÁ THUÊ</p>
+                      <p className="text-lg font-bold leading-tight">{formatPrice(room.price)}<span className="text-[10px] text-muted-foreground font-normal">/tháng</span></p>
                     </div>
                     {room.tenantName ? (
                       <div className="grid grid-cols-2 gap-2">
                         <div>
-                          <p className="text-[10px] text-stone-400 font-medium">KHÁCH THUÊ</p>
-                          <p className="text-xs font-semibold text-stone-800 truncate" title={room.tenantName}>{room.tenantName}</p>
+                          <p className="text-[10px] text-muted-foreground font-medium">KHÁCH THUÊ</p>
+                          <p className="text-xs font-semibold truncate" title={room.tenantName}>{room.tenantName}</p>
                         </div>
                         {room.deposit !== undefined && (
                           <div className="text-right">
-                            <p className="text-[10px] text-stone-400 font-medium">TIỀN ĐẶT CỌC</p>
-                            <p className="text-xs font-bold text-stone-900">{formatPrice(room.deposit)}</p>
+                            <p className="text-[10px] text-muted-foreground font-medium">TIỀN ĐẶT CỌC</p>
+                            <p className="text-xs font-bold">{formatPrice(room.deposit)}</p>
                           </div>
                         )}
                       </div>
                     ) : room.status === "empty" ? (
-                      <p className="text-xs text-emerald-600 font-medium">Sẵn sàng đón khách mới</p>
+                      <p className="text-xs text-success font-medium">Sẵn sàng đón khách mới</p>
                     ) : (
-                      <p className="text-xs text-amber-600 font-medium">Tạm khóa hoạt động</p>
+                      <p className="text-xs text-warning font-medium">Tạm khóa hoạt động</p>
                     )}
                   </div>
                 </CardContent>
               </Card>
             ))
           ) : (
-            <div className="col-span-full py-16 text-center bg-white rounded-2xl border border-stone-200 space-y-3">
-              <ShieldAlert className="w-8 h-8 mx-auto text-stone-400" />
-              <p className="text-stone-500 text-sm">Không tìm thấy phòng nào phù hợp.</p>
+            <div className="col-span-full py-16 text-center bg-card rounded-2xl border space-y-3">
+              <ShieldAlert className="w-8 h-8 mx-auto text-muted-foreground" />
+              <p className="text-muted-foreground text-sm">Không tìm thấy phòng nào phù hợp.</p>
             </div>
           )}
         </div>
       ) : (
-        <div className="bg-white rounded-xl border border-stone-200 shadow-sm overflow-hidden">
+        <div className="bg-card rounded-xl border shadow-xs overflow-x-auto">
           {filteredRooms.length > 0 ? (
-            <table className="w-full text-xs">
-              <thead className="bg-stone-50 border-b border-stone-200">
+            <table className="w-full min-w-[620px] text-xs">
+              <thead className="bg-muted border-b">
                 {table.getHeaderGroups().map((headerGroup) => (
                   <tr key={headerGroup.id}>
                     {headerGroup.headers.map((header) => (
                       <th
                         key={header.id}
-                        className={`py-3 px-4 font-semibold text-stone-600 ${header.column.getCanSort() ? "cursor-pointer select-none hover:text-stone-900" : ""} ${header.column.id === "actions" ? "text-right" : "text-left"}`}
+                        className={`py-3 px-4 font-semibold text-muted-foreground ${header.column.getCanSort() ? "cursor-pointer select-none hover:text-foreground" : ""} ${header.column.id === "actions" ? "text-right" : "text-left"}`}
                         onClick={header.column.getToggleSortingHandler()}
                       >
                         <div className="flex items-center gap-1.5">
                           {flexRender(header.column.columnDef.header, header.getContext())}
                           {header.column.getCanSort() && (
                             {
-                              asc: <ArrowUp className="w-3 h-3 text-stone-500" />,
-                              desc: <ArrowDown className="w-3 h-3 text-stone-500" />,
-                            }[header.column.getIsSorted() as string] ?? <ArrowUpDown className="w-3 h-3 text-stone-400" />
+                              asc: <ArrowUp className="w-3 h-3" />,
+                              desc: <ArrowDown className="w-3 h-3" />,
+                            }[header.column.getIsSorted() as string] ?? <ArrowUpDown className="w-3 h-3 opacity-60" />
                           )}
                         </div>
                       </th>
@@ -707,9 +720,9 @@ export default function RoomsPage() {
                   </tr>
                 ))}
               </thead>
-              <tbody className="divide-y divide-stone-100">
+              <tbody className="divide-y divide-border">
                 {table.getRowModel().rows.map((row) => (
-                  <tr key={row.id} className="hover:bg-stone-50 transition-colors cursor-pointer" onClick={() => openDetailDialog(row.original)}>
+                  <tr key={row.id} className="hover:bg-muted/50 transition-colors cursor-pointer" onClick={() => openDetailDialog(row.original)}>
                     {row.getVisibleCells().map((cell) => (
                       <td key={cell.id} className={`py-3 px-4 ${cell.column.id === "actions" ? "text-right" : ""}`} onClick={cell.column.id === "actions" ? (e) => e.stopPropagation() : undefined}>
                         {flexRender(cell.column.columnDef.cell, cell.getContext())}
@@ -721,8 +734,8 @@ export default function RoomsPage() {
             </table>
           ) : (
             <div className="py-16 text-center space-y-3">
-              <ShieldAlert className="w-8 h-8 mx-auto text-stone-400" />
-              <p className="text-stone-500 text-sm">Không tìm thấy phòng nào phù hợp.</p>
+              <ShieldAlert className="w-8 h-8 mx-auto text-muted-foreground" />
+              <p className="text-muted-foreground text-sm">Không tìm thấy phòng nào phù hợp.</p>
             </div>
           )}
         </div>
@@ -732,18 +745,19 @@ export default function RoomsPage() {
       <Sheet open={isOpenDetail} onOpenChange={(open) => { setIsOpenDetail(open); if (!open) { setDetailRoom(null); resetForm(); } }}>
         <SheetContent 
           side={isMobile ? "bottom" : "right"} 
-          className={`bg-white flex flex-col p-6 transition-all duration-300 ${
+          style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}
+          className={`flex flex-col p-4 sm:p-6 transition-all duration-300 ${
             isMobile 
-              ? "h-[85vh] max-h-[90vh] rounded-t-2xl border-t border-stone-200 overflow-hidden" 
+              ? "h-[85vh] max-h-[90vh] rounded-t-2xl border-t overflow-hidden" 
               : "data-[side=right]:sm:max-w-2xl w-full h-full overflow-hidden"
           }`}
         >
           <SheetHeader className="p-0 mb-4">
-            <SheetTitle className="text-stone-900 text-base font-semibold flex items-center gap-2">
+            <SheetTitle className="text-base font-semibold flex items-center gap-2">
               Phòng {detailRoom?.number}
               {detailRoom && getStatusBadge(detailRoom.status)}
             </SheetTitle>
-            <SheetDescription className="text-stone-500 text-xs">
+            <SheetDescription className="text-xs">
               Thông tin chi tiết phòng trọ.
             </SheetDescription>
           </SheetHeader>
@@ -753,23 +767,23 @@ export default function RoomsPage() {
               {/* Room Info Section */}
               <div>
                 <div 
-                  className="flex items-center justify-between cursor-pointer pb-2 border-b border-stone-100 mb-3"
+                  className="flex items-center justify-between cursor-pointer pb-2 border-b mb-3"
                   onClick={() => setIsRoomInfoOpen(!isRoomInfoOpen)}
                 >
-                  <h4 className="text-xs font-semibold text-stone-700 uppercase tracking-wide">Thông tin phòng</h4>
-                  {isRoomInfoOpen ? <ChevronUp className="w-4 h-4 text-stone-500" /> : <ChevronDown className="w-4 h-4 text-stone-500" />}
+                  <h4 className="text-xs font-semibold uppercase tracking-wide">Thông tin phòng</h4>
+                  {isRoomInfoOpen ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
                 </div>
 
                 {isRoomInfoOpen && (
                   <div className="space-y-4">
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-1.5">
-                        <Label htmlFor="detail-number" className="text-stone-700 text-xs font-medium">Số phòng</Label>
+                        <Label htmlFor="detail-number" className="text-xs font-medium">Số phòng</Label>
                         <Input id="detail-number" placeholder="Ví dụ: 104" value={formNumber} onChange={(e) => setFormNumber(e.target.value)} required />
                       </div>
                       <div className="space-y-1.5">
-                        <Label htmlFor="detail-status" className="text-stone-700 text-xs font-medium">Trạng thái</Label>
-                        <NativeSelect id="detail-status" value={formStatus} onChange={(e) => setFormStatus(e.target.value as any)}>
+                        <Label htmlFor="detail-status" className="text-xs font-medium">Trạng thái</Label>
+                        <NativeSelect id="detail-status" value={formStatus} onChange={(e) => setFormStatus(e.target.value as Room["status"])}>
                           <option value="empty">Đang trống</option>
                           <option value="rented">Đã thuê</option>
                           <option value="maintenance">Bảo trì</option>
@@ -778,16 +792,16 @@ export default function RoomsPage() {
                     </div>
                     <div className="grid grid-cols-2 gap-4 mt-4">
                       <div className="space-y-1.5">
-                        <Label htmlFor="detail-price" className="text-stone-700 text-xs font-medium">Giá thuê (VND/tháng)</Label>
+                        <Label htmlFor="detail-price" className="text-xs font-medium">Giá thuê (VND/tháng)</Label>
                         <Input id="detail-price" type="number" placeholder="2500000" value={formPrice} onChange={(e) => setFormPrice(e.target.value)} required />
                       </div>
                       <div className="space-y-1.5">
-                        <Label htmlFor="detail-area" className="text-stone-700 text-xs font-medium">Diện tích (m²)</Label>
+                        <Label htmlFor="detail-area" className="text-xs font-medium">Diện tích (m²)</Label>
                         <Input id="detail-area" type="number" placeholder="25" value={formArea} onChange={(e) => setFormArea(e.target.value)} required />
                       </div>
                     </div>
                     <div className="space-y-1.5 mt-4">
-                      <Label htmlFor="detail-desc" className="text-stone-700 text-xs font-medium">Mô tả phòng</Label>
+                      <Label htmlFor="detail-desc" className="text-xs font-medium">Mô tả phòng</Label>
                       <Input id="detail-desc" placeholder="Gác lửng, tủ đồ, máy lạnh..." value={formDesc} onChange={(e) => setFormDesc(e.target.value)} />
                     </div>
                   </div>
@@ -797,10 +811,10 @@ export default function RoomsPage() {
               {/* Tenants Section */}
               <div className="pt-2">
                 <div 
-                  className="flex items-center justify-between cursor-pointer pb-2 border-b border-stone-100 mb-3"
+                  className="flex items-center justify-between cursor-pointer pb-2 border-b mb-3"
                   onClick={() => setIsTenantsOpen(!isTenantsOpen)}
                 >
-                  <h4 className="text-xs font-semibold text-stone-700 uppercase tracking-wide">
+                  <h4 className="text-xs font-semibold uppercase tracking-wide">
                     Người thuê ({detailRoomTenants.length})
                   </h4>
                   <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
@@ -808,13 +822,13 @@ export default function RoomsPage() {
                       type="button"
                       variant="outline"
                       size="sm"
-                      className="text-[11px] h-7 px-2.5 border-stone-300 text-stone-700"
+                      className="text-[11px] h-7 px-2.5"
                       onClick={() => setIsOpenAddTenant(true)}
                     >
                       <Plus className="w-3 h-3 mr-1" /> Thêm người thuê
                     </Button>
                     <div className="cursor-pointer" onClick={() => setIsTenantsOpen(!isTenantsOpen)}>
-                      {isTenantsOpen ? <ChevronUp className="w-4 h-4 text-stone-500" /> : <ChevronDown className="w-4 h-4 text-stone-500" />}
+                      {isTenantsOpen ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
                     </div>
                   </div>
                 </div>
@@ -826,35 +840,35 @@ export default function RoomsPage() {
                         {detailRoomTenants.map((tenant) => {
                           const isPrimary = tenant.isPrimary;
                           return (
-                            <div key={tenant.id} className="flex items-center justify-between p-3 rounded-lg border border-stone-200 bg-stone-50/50">
+                            <div key={tenant.id} className="flex items-center justify-between p-3 rounded-lg border bg-muted/50">
                               <div className="flex items-center gap-3">
-                                <div className="w-8 h-8 rounded-full bg-stone-200 flex items-center justify-center text-stone-600">
+                                <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center text-muted-foreground">
                                   <User className="w-4 h-4" />
                                 </div>
                                 <div>
                                   <div className="flex items-center gap-1.5 flex-wrap">
                                     {isPrimary && (
-                                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 shrink-0">
+                                      <Badge variant="warning" className="gap-1">
                                         <Crown className="w-3 h-3" /> Chủ phòng
-                                      </span>
+                                      </Badge>
                                     )}
-                                    <p className="text-sm font-semibold text-stone-900">{tenant.name}</p>
+                                    <p className="text-sm font-semibold">{tenant.name}</p>
                                   </div>
-                                  <p className="text-[11px] text-stone-500">{tenant.phone}</p>
+                                  <p className="text-[11px] text-muted-foreground">{tenant.phone}</p>
                                 </div>
                               </div>
                               <div className="flex items-center gap-2">
                                 <div className="text-right">
                                   {tenant.deposit > 0 && (
-                                    <p className="text-xs text-stone-600">
-                                      Cọc: <span className="font-semibold text-stone-900">{formatPrice(tenant.deposit)}</span>
+                                    <p className="text-xs text-muted-foreground">
+                                      Cọc: <span className="font-semibold text-foreground">{formatPrice(tenant.deposit)}</span>
                                     </p>
                                   )}
                                   {!isPrimary && detailRoom?.tenantName && (
                                     <Button
                                       type="button"
                                       variant="ghost"
-                                      className="text-[10px] h-6 px-2 text-stone-500 hover:text-amber-600 mt-1"
+                                      className="text-[10px] h-6 px-2 text-muted-foreground hover:text-warning mt-1"
                                       onClick={() => {
                                         editTenant(tenant.id, { isPrimary: true });
                                       }}
@@ -866,10 +880,11 @@ export default function RoomsPage() {
                                 <Button
                                   type="button"
                                   variant="ghost"
-                                  size="icon"
-                                  className="h-8 w-8 text-stone-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg"
+                                  size="icon-sm"
+                                  className="text-muted-foreground hover:text-destructive hover:bg-danger-bg"
                                   title="Gỡ khỏi phòng"
                                   onClick={() => handleUnlinkTenant(tenant.id, tenant.name, isPrimary)}
+                                  aria-label={`Gỡ ${tenant.name} khỏi phòng`}
                                 >
                                   <Trash2 className="w-4 h-4" />
                                 </Button>
@@ -879,7 +894,7 @@ export default function RoomsPage() {
                         })}
                       </div>
                     ) : (
-                      <div className="text-center py-6 text-stone-400 text-xs">
+                      <div className="text-center py-6 text-muted-foreground text-xs">
                         <User className="w-6 h-6 mx-auto mb-1" />
                         Chưa có người thuê
                       </div>
@@ -889,24 +904,24 @@ export default function RoomsPage() {
               </div>
 
               {/* Utility Index History & Logging Section */}
-              <div className="pt-2 border-t border-stone-100 space-y-4">
+              <div className="pt-2 border-t space-y-4">
                 <div 
-                  className="flex items-center justify-between cursor-pointer pb-2 border-b border-stone-100 mb-3"
+                  className="flex items-center justify-between cursor-pointer pb-2 border-b mb-3"
                   onClick={() => setIsUtilitiesOpen(!isUtilitiesOpen)}
                 >
-                  <h4 className="text-xs font-semibold text-stone-700 uppercase tracking-wide">Chỉ số điện nước</h4>
+                  <h4 className="text-xs font-semibold uppercase tracking-wide">Chỉ số điện nước</h4>
                   <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
                     <Button
                       type="button"
                       variant="outline"
                       size="sm"
-                      className="text-[11px] h-7 px-2.5 border-stone-300 text-stone-700"
+                      className="text-[11px] h-7 px-2.5"
                       onClick={() => setIsFormOpen(!isFormOpen)}
                     >
                       {isFormOpen ? "Hủy" : "Ghi chỉ số"}
                     </Button>
                     <div className="cursor-pointer" onClick={() => setIsUtilitiesOpen(!isUtilitiesOpen)}>
-                      {isUtilitiesOpen ? <ChevronUp className="w-4 h-4 text-stone-500" /> : <ChevronDown className="w-4 h-4 text-stone-500" />}
+                      {isUtilitiesOpen ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
                     </div>
                   </div>
                 </div>
@@ -914,59 +929,59 @@ export default function RoomsPage() {
                 {isUtilitiesOpen && (
                   <div className="space-y-4">
                     {isFormOpen && (
-                      <div className="p-3 border border-stone-200 bg-stone-50/50 rounded-lg space-y-3">
-                        <h5 className="text-[11px] font-semibold text-stone-700">Ghi chỉ số sử dụng</h5>
+                      <div className="p-3 border bg-muted/50 rounded-lg space-y-3">
+                        <h5 className="text-[11px] font-semibold">Ghi chỉ số sử dụng</h5>
                         <div className="grid grid-cols-2 gap-3">
                           <div className="space-y-1.5 col-span-2">
-                            <Label htmlFor="usage-month" className="text-[11px] text-stone-600 font-medium">Tháng ghi nhận</Label>
+                            <Label htmlFor="usage-month" className="text-[11px] font-medium">Tháng ghi nhận</Label>
                             <Input
                               id="usage-month"
                               type="month"
-                              className="h-8 text-xs bg-white"
+                              className="h-8 text-xs"
                               value={recordMonth}
                               onChange={(e) => setRecordMonth(e.target.value)}
                               required
                             />
                           </div>
                           <div className="space-y-1.5">
-                            <Label htmlFor="elec-start" className="text-[11px] text-stone-600 font-medium">Điện bắt đầu (kWh)</Label>
+                            <Label htmlFor="elec-start" className="text-[11px] font-medium">Điện bắt đầu (kWh)</Label>
                             <Input
                               id="elec-start"
                               type="number"
-                              className="h-8 text-xs bg-white"
+                              className="h-8 text-xs"
                               placeholder="0"
                               value={recordElecStart}
                               onChange={(e) => setRecordElecStart(e.target.value)}
                             />
                           </div>
                           <div className="space-y-1.5">
-                            <Label htmlFor="elec-end" className="text-[11px] text-stone-600 font-medium">Điện kết thúc (kWh)</Label>
+                            <Label htmlFor="elec-end" className="text-[11px] font-medium">Điện kết thúc (kWh)</Label>
                             <Input
                               id="elec-end"
                               type="number"
-                              className="h-8 text-xs bg-white"
+                              className="h-8 text-xs"
                               placeholder="0"
                               value={recordElecEnd}
                               onChange={(e) => setRecordElecEnd(e.target.value)}
                             />
                           </div>
                           <div className="space-y-1.5">
-                            <Label htmlFor="water-start" className="text-[11px] text-stone-600 font-medium">Nước bắt đầu (m³)</Label>
+                            <Label htmlFor="water-start" className="text-[11px] font-medium">Nước bắt đầu (m³)</Label>
                             <Input
                               id="water-start"
                               type="number"
-                              className="h-8 text-xs bg-white"
+                              className="h-8 text-xs"
                               placeholder="0"
                               value={recordWaterStart}
                               onChange={(e) => setRecordWaterStart(e.target.value)}
                             />
                           </div>
                           <div className="space-y-1.5">
-                            <Label htmlFor="water-end" className="text-[11px] text-stone-600 font-medium">Nước kết thúc (m³)</Label>
+                            <Label htmlFor="water-end" className="text-[11px] font-medium">Nước kết thúc (m³)</Label>
                             <Input
                               id="water-end"
                               type="number"
-                              className="h-8 text-xs bg-white"
+                              className="h-8 text-xs"
                               placeholder="0"
                               value={recordWaterEnd}
                               onChange={(e) => setRecordWaterEnd(e.target.value)}
@@ -977,7 +992,7 @@ export default function RoomsPage() {
                           type="button"
                           disabled={isRecording}
                           onClick={handleSaveUsage}
-                          className="w-full h-8 bg-stone-900 hover:bg-stone-850 text-white text-[11px]"
+                          className="w-full h-8 text-[11px]"
                         >
                           {isRecording ? "Đang lưu..." : "Lưu chỉ số"}
                         </Button>
@@ -986,11 +1001,11 @@ export default function RoomsPage() {
 
                     {/* Residency Filtering Dropdown */}
                     {historicalTenants.length > 0 && (
-                      <div className="flex items-center justify-between bg-stone-50 p-2 rounded-lg border border-stone-200">
-                        <Label htmlFor="filter-tenant" className="text-[11px] font-medium text-stone-600">Lọc theo khách thuê:</Label>
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 bg-muted p-2 rounded-lg border">
+                        <Label htmlFor="filter-tenant" className="text-[11px] font-medium">Lọc theo khách thuê:</Label>
                         <NativeSelect
                           id="filter-tenant"
-                          className="text-[11px] h-7 w-48"
+                          className="text-[11px] h-7 w-full sm:w-48"
                           value={selectedTenantFilter}
                           onChange={(e) => setSelectedTenantFilter(e.target.value)}
                         >
@@ -1006,11 +1021,11 @@ export default function RoomsPage() {
 
                     {/* Usage Log List */}
                     {isLoadingUsages ? (
-                      <div className="flex items-center justify-center py-6 text-stone-400 text-xs gap-1.5">
+                      <div className="flex items-center justify-center py-6 text-muted-foreground text-xs gap-1.5">
                         <Loader2 className="w-3.5 h-3.5 animate-spin" /> Đang tải lịch sử...
                       </div>
                     ) : usagesList.length > 0 ? (
-                      <div className="border border-stone-200 rounded-lg overflow-hidden divide-y divide-stone-150">
+                      <div className="border rounded-lg overflow-hidden divide-y divide-border">
                         {usagesList.map((usage) => {
                           const electricityUsed = usage.electricityEnd - usage.electricityStart;
                           const waterUsed = usage.waterEnd - usage.waterStart;
@@ -1018,54 +1033,54 @@ export default function RoomsPage() {
                             (inv) => inv.roomNumber === detailRoom.number && inv.month === usage.month
                           );
                           return (
-                            <div key={usage.id} className="p-3 bg-white text-stone-800 space-y-2 hover:bg-stone-50/50 transition-colors">
+                            <div key={usage.id} className="p-3 bg-card space-y-2 hover:bg-muted/50 transition-colors">
                               <div className="flex items-center justify-between">
-                                <span className="text-xs font-semibold text-stone-900 bg-stone-100 px-2 py-0.5 rounded">Tháng {usage.month}</span>
-                                <span className="text-[10px] text-stone-400">Ghi nhận: {new Date(usage.createdAt).toLocaleDateString("vi-VN")}</span>
+                                <span className="text-xs font-semibold bg-muted px-2 py-0.5 rounded">Tháng {usage.month}</span>
+                                <span className="text-[10px] text-muted-foreground">Ghi nhận: {new Date(usage.createdAt).toLocaleDateString("vi-VN")}</span>
                               </div>
                               <div className="grid grid-cols-2 gap-4 text-xs">
                                 <div className="space-y-0.5">
-                                  <p className="text-[10px] text-stone-500 font-medium">Điện tiêu thụ</p>
-                                  <p className="font-semibold text-stone-900">{electricityUsed >= 0 ? `${electricityUsed} kWh` : "Chưa có chỉ số cuối"}</p>
-                                  <p className="text-[10px] text-stone-400">Chỉ số: {usage.electricityStart} → {usage.electricityEnd}</p>
+                                  <p className="text-[10px] text-muted-foreground font-medium">Điện tiêu thụ</p>
+                                  <p className="font-semibold">{electricityUsed >= 0 ? `${electricityUsed} kWh` : "Chưa có chỉ số cuối"}</p>
+                                  <p className="text-[10px] text-muted-foreground">Chỉ số: {usage.electricityStart} → {usage.electricityEnd}</p>
                                 </div>
                                 <div className="space-y-0.5">
-                                  <p className="text-[10px] text-stone-500 font-medium">Nước tiêu thụ</p>
-                                  <p className="font-semibold text-stone-900">{waterUsed >= 0 ? `${waterUsed} m³` : "Chưa có chỉ số cuối"}</p>
-                                  <p className="text-[10px] text-stone-400">Chỉ số: {usage.waterStart} → {usage.waterEnd}</p>
+                                  <p className="text-[10px] text-muted-foreground font-medium">Nước tiêu thụ</p>
+                                  <p className="font-semibold">{waterUsed >= 0 ? `${waterUsed} m³` : "Chưa có chỉ số cuối"}</p>
+                                  <p className="text-[10px] text-muted-foreground">Chỉ số: {usage.waterStart} → {usage.waterEnd}</p>
                                 </div>
                               </div>
                               {invoice && (
-                                <div className="mt-3 pt-3 border-t border-dashed border-stone-200 space-y-2">
+                                <div className="mt-3 pt-3 border-t border-dashed space-y-2">
                                   <div className="flex items-center justify-between">
-                                    <span className="text-[10px] font-semibold text-stone-500 uppercase tracking-wider">Chi tiết hóa đơn</span>
+                                    <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Chi tiết hóa đơn</span>
                                     {invoice.status === "paid" ? (
-                                      <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200 text-[9px] px-1.5 py-0.5">Đã thanh toán</Badge>
+                                      <Badge variant="success" className="text-[9px] px-1.5 py-0.5">Đã thanh toán</Badge>
                                     ) : (
-                                      <Badge className="bg-amber-100 text-amber-800 border-amber-200 text-[9px] px-1.5 py-0.5">Chưa thanh toán</Badge>
+                                      <Badge variant="warning" className="text-[9px] px-1.5 py-0.5">Chưa thanh toán</Badge>
                                     )}
                                   </div>
                                   
-                                  <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[11px] text-stone-600 bg-stone-50/50 p-2.5 rounded-lg border border-stone-150">
-                                    <div className="flex justify-between col-span-2 pb-1 border-b border-stone-200 mb-1">
-                                      <span className="font-semibold text-stone-800">Tổng cộng:</span>
-                                      <span className="font-bold text-stone-900">{formatPrice(invoice.total)}</span>
+                                  <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[11px] text-muted-foreground bg-muted/50 p-2.5 rounded-lg border">
+                                    <div className="flex justify-between col-span-2 pb-1 border-b mb-1">
+                                      <span className="font-semibold text-foreground">Tổng cộng:</span>
+                                      <span className="font-bold text-foreground">{formatPrice(invoice.total)}</span>
                                     </div>
                                     <div className="flex justify-between">
                                       <span>Tiền phòng:</span>
-                                      <span className="font-medium text-stone-800">{formatPrice(invoice.roomPrice)}</span>
+                                      <span className="font-medium text-foreground">{formatPrice(invoice.roomPrice)}</span>
                                     </div>
                                     <div className="flex justify-between">
                                       <span>Tiền điện:</span>
-                                      <span className="font-medium text-stone-800">{formatPrice(invoice.electricityCost)}</span>
+                                      <span className="font-medium text-foreground">{formatPrice(invoice.electricityCost)}</span>
                                     </div>
                                     <div className="flex justify-between">
                                       <span>Tiền nước:</span>
-                                      <span className="font-medium text-stone-800">{formatPrice(invoice.waterCost)}</span>
+                                      <span className="font-medium text-foreground">{formatPrice(invoice.waterCost)}</span>
                                     </div>
                                     <div className="flex justify-between">
                                       <span>Dịch vụ khác:</span>
-                                      <span className="font-medium text-stone-800">{formatPrice(invoice.otherServicesCost)}</span>
+                                      <span className="font-medium text-foreground">{formatPrice(invoice.otherServicesCost)}</span>
                                     </div>
                                   </div>
                                 </div>
@@ -1075,7 +1090,7 @@ export default function RoomsPage() {
                         })}
                       </div>
                     ) : (
-                      <div className="text-center py-8 text-stone-400 text-xs">
+                      <div className="text-center py-8 text-muted-foreground text-xs">
                         Chưa có lịch sử điện nước cho khoảng thời gian này
                       </div>
                     )}
@@ -1084,9 +1099,9 @@ export default function RoomsPage() {
               </div>
             </div>
 
-            <SheetFooter className="pt-4 border-t border-stone-100 p-0 flex flex-row justify-end gap-2 shrink-0">
-              <Button type="button" variant="ghost" className="text-xs" onClick={() => { setIsOpenDetail(false); setDetailRoom(null); resetForm(); }}>Đóng</Button>
-              <Button type="submit" className="bg-stone-900 text-white text-xs hover:bg-stone-800">Lưu thay đổi</Button>
+            <SheetFooter className="pt-4 border-t p-0 flex flex-row justify-end gap-2 shrink-0">
+              <Button type="button" variant="ghost" size="sm" className="text-xs" onClick={() => { setIsOpenDetail(false); setDetailRoom(null); resetForm(); }}>Đóng</Button>
+              <Button type="submit" size="sm" className="text-xs">Lưu thay đổi</Button>
             </SheetFooter>
           </form>
         </SheetContent>
@@ -1094,44 +1109,44 @@ export default function RoomsPage() {
 
       {/* Add Tenant Dialog */}
       <Dialog open={isOpenAddTenant} onOpenChange={(open) => { setIsOpenAddTenant(open); if (!open) resetTenantForm(); }}>
-        <DialogContent className="max-w-sm bg-white">
+        <DialogContent className="max-w-[calc(100%-2rem)] sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle className="text-stone-900 text-base font-semibold">Thêm người thuê</DialogTitle>
-            <DialogDescription className="text-stone-500 text-xs">
-              Phòng {detailRoom?.number} — Nhà trọ {currentHostel}
+            <DialogTitle className="text-base font-semibold">Thêm người thuê</DialogTitle>
+            <DialogDescription className="text-xs">
+              Phòng {detailRoom?.number} - Nhà trọ {currentHostel}
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleAddTenant} className="space-y-4 py-2">
             <Button
               type="button"
               variant="outline"
-              className="w-full text-xs gap-1.5 py-2 px-3 border-stone-300 text-stone-700 hover:bg-stone-50"
+              className="w-full text-xs gap-1.5 py-2 px-3"
               onClick={() => setIsOpenQRScanner(true)}
             >
               <QrCode className="w-4 h-4" /> Quét mã QR từ thẻ CCCD
             </Button>
 
             <div className="space-y-1.5">
-              <Label htmlFor="tenant-name" className="text-stone-700 text-xs font-medium">Họ tên <span className="text-rose-500">*</span></Label>
+              <Label htmlFor="tenant-name" className="text-xs font-medium">Họ tên <span className="text-destructive">*</span></Label>
               <Input id="tenant-name" placeholder="Nguyễn Văn A" value={tenantFormName} onChange={(e) => setTenantFormName(e.target.value)} required />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <Label htmlFor="tenant-cccd" className="text-stone-700 text-xs font-medium">CCCD</Label>
+                <Label htmlFor="tenant-cccd" className="text-xs font-medium">CCCD</Label>
                 <Input id="tenant-cccd" placeholder="079201000001" value={tenantFormCccd} onChange={(e) => setTenantFormCccd(e.target.value)} />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="tenant-phone" className="text-stone-700 text-xs font-medium">Số điện thoại</Label>
+                <Label htmlFor="tenant-phone" className="text-xs font-medium">Số điện thoại</Label>
                 <Input id="tenant-phone" placeholder="0912345678" value={tenantFormPhone} onChange={(e) => setTenantFormPhone(e.target.value)} />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <Label htmlFor="tenant-dob" className="text-stone-700 text-xs font-medium">Ngày sinh</Label>
+                <Label htmlFor="tenant-dob" className="text-xs font-medium">Ngày sinh</Label>
                 <Input id="tenant-dob" type="date" value={tenantFormDob} onChange={(e) => setTenantFormDob(e.target.value)} />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="tenant-gender" className="text-stone-700 text-xs font-medium">Giới tính</Label>
+                <Label htmlFor="tenant-gender" className="text-xs font-medium">Giới tính</Label>
                 <NativeSelect id="tenant-gender" value={tenantFormGender} onChange={(e) => setTenantFormGender(e.target.value)}>
                   <option value="">Chọn giới tính</option>
                   <option value="Nam">Nam</option>
@@ -1142,23 +1157,23 @@ export default function RoomsPage() {
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="tenant-address" className="text-stone-700 text-xs font-medium">Địa chỉ thường trú</Label>
+              <Label htmlFor="tenant-address" className="text-xs font-medium">Địa chỉ thường trú</Label>
               <Input id="tenant-address" placeholder="Tỉnh/Thành phố..." value={tenantFormAddress} onChange={(e) => setTenantFormAddress(e.target.value)} />
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <Label htmlFor="tenant-cccd-date" className="text-stone-700 text-xs font-medium">Ngày cấp CCCD</Label>
+                <Label htmlFor="tenant-cccd-date" className="text-xs font-medium">Ngày cấp CCCD</Label>
                 <Input id="tenant-cccd-date" type="date" value={tenantFormCccdDate} onChange={(e) => setTenantFormCccdDate(e.target.value)} />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="tenant-deposit-input" className="text-stone-700 text-xs font-medium">Tiền đặt cọc (VND) <span className="text-rose-500">*</span></Label>
+                <Label htmlFor="tenant-deposit-input" className="text-xs font-medium">Tiền đặt cọc (VND) <span className="text-destructive">*</span></Label>
                 <Input id="tenant-deposit-input" type="number" placeholder="2500000" value={tenantFormDeposit} onChange={(e) => setTenantFormDeposit(e.target.value)} required />
               </div>
             </div>
             <DialogFooter className="pt-2">
-              <Button type="button" variant="ghost" className="text-xs" onClick={() => { setIsOpenAddTenant(false); resetTenantForm(); }}>Hủy</Button>
-              <Button type="submit" className="bg-stone-900 text-white text-xs hover:bg-stone-800">Thêm người thuê</Button>
+              <Button type="button" variant="ghost" size="sm" className="text-xs" onClick={() => { setIsOpenAddTenant(false); resetTenantForm(); }}>Hủy</Button>
+              <Button type="submit" size="sm" className="text-xs">Thêm người thuê</Button>
             </DialogFooter>
           </form>
         </DialogContent>
@@ -1166,20 +1181,20 @@ export default function RoomsPage() {
 
       {/* Edit Room Dialog */}
       <Dialog open={isOpenEdit} onOpenChange={(open) => { setIsOpenEdit(open); if (!open) { setCurrentRoom(null); resetForm(); } }}>
-        <DialogContent className="max-w-md bg-white">
+        <DialogContent className="max-w-[calc(100%-2rem)] sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="text-stone-900 text-base font-semibold">Chỉnh sửa phòng {currentRoom?.number}</DialogTitle>
-            <DialogDescription className="text-stone-500 text-xs">Cập nhật thông tin chi tiết của phòng trọ này.</DialogDescription>
+            <DialogTitle className="text-base font-semibold">Chỉnh sửa phòng {currentRoom?.number}</DialogTitle>
+            <DialogDescription className="text-xs">Cập nhật thông tin chi tiết của phòng trọ này.</DialogDescription>
           </DialogHeader>
           <form onSubmit={handleEditRoom} className="space-y-4 py-2">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <Label htmlFor="edit-number" className="text-stone-700 text-xs font-medium">Số phòng</Label>
+                <Label htmlFor="edit-number" className="text-xs font-medium">Số phòng</Label>
                 <Input id="edit-number" placeholder="Ví dụ: 104" value={formNumber} onChange={(e) => setFormNumber(e.target.value)} required />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="edit-status" className="text-stone-700 text-xs font-medium">Trạng thái</Label>
-                <NativeSelect id="edit-status" value={formStatus} onChange={(e) => setFormStatus(e.target.value as any)}>
+                <Label htmlFor="edit-status" className="text-xs font-medium">Trạng thái</Label>
+                <NativeSelect id="edit-status" value={formStatus} onChange={(e) => setFormStatus(e.target.value as Room["status"])}>
                   <option value="empty">Đang trống</option>
                   <option value="rented">Đã thuê</option>
                   <option value="maintenance">Bảo trì</option>
@@ -1188,21 +1203,21 @@ export default function RoomsPage() {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <Label htmlFor="edit-price" className="text-stone-700 text-xs font-medium">Giá thuê (VND/tháng)</Label>
+                <Label htmlFor="edit-price" className="text-xs font-medium">Giá thuê (VND/tháng)</Label>
                 <Input id="edit-price" type="number" placeholder="2500000" value={formPrice} onChange={(e) => setFormPrice(e.target.value)} required />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="edit-area" className="text-stone-700 text-xs font-medium">Diện tích (m²)</Label>
+                <Label htmlFor="edit-area" className="text-xs font-medium">Diện tích (m²)</Label>
                 <Input id="edit-area" type="number" placeholder="25" value={formArea} onChange={(e) => setFormArea(e.target.value)} required />
               </div>
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="edit-desc" className="text-stone-700 text-xs font-medium">Mô tả phòng</Label>
+              <Label htmlFor="edit-desc" className="text-xs font-medium">Mô tả phòng</Label>
               <Input id="edit-desc" placeholder="Gác lửng, tủ đồ, máy lạnh..." value={formDesc} onChange={(e) => setFormDesc(e.target.value)} />
             </div>
             <DialogFooter className="pt-2">
-              <Button type="button" variant="ghost" className="text-xs" onClick={() => setIsOpenEdit(false)}>Hủy</Button>
-              <Button type="submit" className="bg-stone-900 text-white text-xs hover:bg-stone-800">Cập nhật</Button>
+              <Button type="button" variant="ghost" size="sm" className="text-xs" onClick={() => setIsOpenEdit(false)}>Hủy</Button>
+              <Button type="submit" size="sm" className="text-xs">Cập nhật</Button>
             </DialogFooter>
           </form>
         </DialogContent>
@@ -1215,21 +1230,21 @@ export default function RoomsPage() {
           stopScanner();
         }
       }}>
-        <DialogContent className="max-w-sm bg-white">
+        <DialogContent className="max-w-[calc(100%-2rem)] sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle className="text-stone-900 text-base font-semibold">Quét mã QR CCCD</DialogTitle>
-            <DialogDescription className="text-stone-500 text-xs">
+            <DialogTitle className="text-base font-semibold">Quét mã QR CCCD</DialogTitle>
+            <DialogDescription className="text-xs">
               Đặt mã QR trên thẻ CCCD vào khung hình để quét tự động.
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col items-center justify-center p-4">
-            <div id="reader" className="w-full aspect-square max-w-[280px] bg-stone-100 rounded-lg overflow-hidden border border-stone-200 relative">
-              <div className="absolute inset-0 border-2 border-emerald-500 rounded-lg animate-pulse pointer-events-none" />
+            <div id="reader" className="w-full aspect-square max-w-[280px] bg-muted rounded-lg overflow-hidden border relative">
+              <div className="absolute inset-0 border-2 border-success rounded-lg animate-pulse pointer-events-none" />
             </div>
-            {qrError && <p className="text-xs text-rose-500 mt-2 text-center">{qrError}</p>}
+            {qrError && <p className="text-xs text-destructive mt-2 text-center">{qrError}</p>}
           </div>
           <DialogFooter className="pt-2">
-            <Button type="button" variant="ghost" className="text-xs" onClick={() => setIsOpenQRScanner(false)}>Đóng</Button>
+            <Button type="button" variant="ghost" size="sm" className="text-xs" onClick={() => setIsOpenQRScanner(false)}>Đóng</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

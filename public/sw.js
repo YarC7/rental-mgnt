@@ -1,7 +1,12 @@
-const CACHE_NAME = "zenboard-cache-v1";
+const CACHE_NAME = "zenboard-cache-v3";
+const PRECACHE_URLS = ["/", "/manifest.webmanifest", "/icon-192.png", "/icon-512.png"];
 
 self.addEventListener("install", (event) => {
   self.skipWaiting();
+  // Precache app shell để mở được trang chính khi offline
+  event.waitUntil(
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(PRECACHE_URLS)).catch(() => {})
+  );
 });
 
 self.addEventListener("activate", (event) => {
@@ -42,7 +47,8 @@ self.addEventListener("fetch", (event) => {
           return response;
         })
         .catch(() => {
-          return caches.match(request);
+          // Offline: trả trang đã cache, cuối cùng fallback về trang chủ
+          return caches.match(request).then((cached) => cached || caches.match("/"));
         })
     );
     return;
