@@ -50,6 +50,13 @@
       "when": 1791777438047,
       "tag": "0006_broken_wolverine",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1791790460358,
+      "tag": "0007_safe_emma_frost",
+      "breakpoints": true
     }
   ]
 }
