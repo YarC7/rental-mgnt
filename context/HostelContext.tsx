@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { usePathname } from "next/navigation";
+import { useSession } from "@/lib/auth-client";
 
 export interface Room {
   id: string;
@@ -150,6 +151,12 @@ export const HostelProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const pathname = usePathname();
   const [currentHostel, setCurrentHostel] = useState<string>("A");
 
+  // Chỉ fetch data khi đã đăng nhập. Tránh gọi API lúc ở trang sign-in
+  // (401 rồi cache lỗi, sau login router.push không remount provider nên
+  // data không bao giờ load lại).
+  const { data: session, isPending: isSessionPending } = useSession();
+  const isAuthenticated = !isSessionPending && !!session;
+
   // Load hostels
   const { data: rawHostels } = useQuery<Hostel[]>({
     queryKey: ["hostels"],
@@ -157,6 +164,7 @@ export const HostelProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       if (!res.ok) throw new Error("Failed to fetch hostels");
       return res.json();
     }),
+    enabled: isAuthenticated,
   });
   const hostels = rawHostels || (EMPTY_ARRAY as Hostel[]);
 
@@ -197,6 +205,7 @@ export const HostelProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       if (!res.ok) throw new Error("Failed to fetch rooms");
       return res.json();
     }),
+    enabled: isAuthenticated,
   });
 
   const { data: rawTenants } = useQuery<Tenant[]>({
@@ -205,6 +214,7 @@ export const HostelProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       if (!res.ok) throw new Error("Failed to fetch tenants");
       return res.json();
     }),
+    enabled: isAuthenticated,
   });
 
   const { data: rawServices } = useQuery<Service[]>({
@@ -213,6 +223,7 @@ export const HostelProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       if (!res.ok) throw new Error("Failed to fetch services");
       return res.json();
     }),
+    enabled: isAuthenticated,
   });
 
   const { data: rawInvoices } = useQuery<Invoice[]>({
@@ -221,6 +232,7 @@ export const HostelProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       if (!res.ok) throw new Error("Failed to fetch invoices");
       return res.json();
     }),
+    enabled: isAuthenticated,
   });
 
   // Client-side synchronization: Enrich Room structures with Tenant information

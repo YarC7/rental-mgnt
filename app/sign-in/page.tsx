@@ -23,12 +23,13 @@ function SignInForm() {
     if (!email || !password) return;
     setIsLoading(true);
     const { error } = await signIn.email({ email, password });
-    setIsLoading(false);
     if (error) {
+      setIsLoading(false);
       toast.error("Đăng nhập thất bại. Kiểm tra lại email và mật khẩu.");
       return;
     }
     toast.success("Đăng nhập thành công.");
+    // Giữ spinner tới khi chuyển trang xong, không bật lại form
     router.push(callbackUrl);
     router.refresh();
   };

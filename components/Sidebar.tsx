@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { useHostel } from "@/context/HostelContext";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { signOut, useSession } from "@/lib/auth-client";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   Sidebar as SidebarBase,
   SidebarContent,
@@ -26,6 +27,7 @@ export default function Sidebar() {
   const { data: session } = useSession();
   const { currentHostel, hostels } = useHostel();
   const { state, setOpenMobile } = useSidebar();
+  const queryClient = useQueryClient();
 
   // Trang đăng nhập tự render full-screen, không dùng shell
   if (pathname === "/sign-in") {
@@ -130,7 +132,11 @@ export default function Sidebar() {
           <button
             onClick={() => signOut({
               fetchOptions: {
-                onSuccess: () => router.push("/sign-in"),
+                onSuccess: () => {
+                  // Xóa sạch data đã cache để user sau không thấy ké
+                  queryClient.clear();
+                  router.push("/sign-in");
+                },
               },
             })}
             className="text-sidebar-foreground/70 hover:text-sidebar-foreground shrink-0 p-1.5 rounded-md hover:bg-sidebar-accent transition-colors cursor-pointer"
