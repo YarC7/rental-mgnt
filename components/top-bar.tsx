@@ -17,6 +17,11 @@ function getPageTitle(pathname: string): string {
 export default function TopBar() {
   const pathname = usePathname() || "";
 
+  // Trang đăng nhập tự render full-screen, không dùng shell
+  if (pathname === "/sign-in") {
+    return null;
+  }
+
   return (
     <div className="min-h-12 flex items-center gap-2 px-4 pt-[env(safe-area-inset-top)] bg-card border-b border-border sticky top-0 z-40 shrink-0">
       <SidebarTrigger className="-ml-1" />
